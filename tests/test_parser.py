@@ -115,3 +115,15 @@ def test_has_next_page_on_page_2(page_2: bytes) -> None:
 def test_has_next_page_on_initial_form(form_initial: bytes) -> None:
     # The search form before any search has no results table at all.
     assert parser.has_next_page(form_initial) is False
+
+
+def test_has_next_page_false_when_pager_lacks_right_arrow() -> None:
+    # Synthetic: a results-shaped page where the pager has prev/label/last
+    # but no right-arrow ($ctl04). Simulates the last page of a paginated set.
+    html = b"""<html><body>
+        <table><tr class="DataGridItem"><td>row</td></tr></table>
+        <input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl01" src="leftend.svg"/>
+        <input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl02" src="left.svg"/>
+        <input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl05" src="rightend.svg"/>
+    </body></html>"""
+    assert parser.has_next_page(html) is False

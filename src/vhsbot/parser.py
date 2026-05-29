@@ -16,7 +16,7 @@ from vhsbot.db import CourseSnapshot
 
 _ENCODING = "windows-1252"
 _KURS_ID_RE = re.compile(r"CourseDetail\.aspx\?id=(\d+)", re.IGNORECASE)
-_NEXT_PAGE_NAME_RE = re.compile(r"\$ILDataGrid1\$ctl01\$ctl0[34]$")
+_NEXT_PAGE_NAME_RE = re.compile(r"\$ILDataGrid1\$ctl01\$ctl04$")
 _WS_RE = re.compile(r"\s+")
 
 

@@ -273,10 +273,18 @@ def mark_notified(conn: sqlite3.Connection, *, kurs_id: int) -> None:
 # --- notification_log -------------------------------------------------------
 
 
+VALID_NOTIFICATION_REASONS: frozenset[str] = frozenset({"new", "back_in_stock", "backfill"})
+
+
 def record_notification(
     conn: sqlite3.Connection, *, user_id: int, kurs_id: int, reason: str
 ) -> bool:
-    """Returns True if the row was inserted, False if a matching row already existed."""
+    """Returns True if the row was inserted, False if a matching row already existed.
+
+    Callers should pass a value from :data:`VALID_NOTIFICATION_REASONS`. The
+    storage layer does not enforce this — the PK includes ``reason``, so a
+    typo would silently create a stuck row.
+    """
     with conn:
         cur = conn.execute(
             "INSERT OR IGNORE INTO notification_log (user_id, kurs_id, reason) VALUES (?, ?, ?)",
