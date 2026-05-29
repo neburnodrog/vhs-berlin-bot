@@ -17,15 +17,30 @@
 | Storage | **SQLite** at `/data/vhsbot.db` (mounted Coolify volume); raw snapshot to `/data/last_snapshot.json` for replay, pruned weekly | Boring, correct, zero ops |
 | Repo | Private GitHub repo `vhs-berlin-bot` under personal account (neburgordon@gmail.com identity) | Personal-project boundary [[feedback-personal-email]] |
 
-## Recon facts to encode
+## Recon facts to encode (corrected 2026-05-29 from live captures)
 
-- ASP.NET WebForms; form action `./CourseSearch.aspx`, POST with `__VIEWSTATE`, `__VIEWSTATEGENERATOR=2B79C7F0`, `__EVENTVALIDATION`, `__EVENTTARGET=ctl00$Content$btnSearch`, `__EVENTARGUMENT=""`.
-- Encoding: **windows-1252** on response (not UTF-8).
+The original recon in this section was partially wrong. The corrected flow below is verified against `tests/fixtures/*.html` (real captured responses); see `tests/fixtures/README.md` for the full report.
+
+- ASP.NET WebForms. Two distinct pages in the search flow:
+  - `CourseSearch.aspx` — the form. Default tab is *Einfach*; the district checkbox list lives on the *Erweitert* tab.
+  - `CourseList.aspx` — the results page. Server **302-redirects** here after a successful search; subsequent pagination POSTs also target this URL.
+- Hidden state fields:
+  - `__VIEWSTATE`, `__VIEWSTATEGENERATOR` — present on every response. Re-extract from each response before the next POST.
+  - `__EVENTVALIDATION` — **absent on the initial GET**, present on `CourseList.aspx` responses.
+- **Required flow** (cookies persist across all steps via one `httpx.AsyncClient`):
+  1. `GET CourseSearch.aspx` — extract initial state.
+  2. `POST CourseSearch.aspx` with `ctl00$Content$lbtnTab2=Erweitert` + state — switches to the advanced tab. Re-extract state from response.
+  3. `POST CourseSearch.aspx` with refreshed state +
+     - `ctl00$Content$btnSearch=Suchen` (it's a real submit button with `useSubmitBehavior=true` — do **not** use `__EVENTTARGET=...btnSearch`),
+     - district checkbox(es): `ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$<N>=on`,
+     - empty search term: `ctl00$Content$AdvancedSearch1$SearchBox1$txtSearchTerm=`.
+     The server 302s to `CourseList.aspx`; httpx auto-follows.
+  4. To paginate: find `<input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl04" ...>` in the result HTML (that's the right-arrow). POST to `CourseList.aspx` with refreshed state plus image-submit coords `<name>.x=5&<name>.y=5`. Pagination is **not** `__doPostBack`.
+- Encoding: the HTTP `Content-Type` header lies (says `iso-8859-15`); the page's `<meta charset>` is `windows-1252` and that's truthful. Save `response.content` raw, decode with `.decode('windows-1252')`. Umlauts then render correctly.
 - Session timeout: **29.5 min** — complete each scan well within.
-- Detail URL: `https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseDetails.aspx?Kurs-ID=<int>`.
-- District field: `ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$<N>` checkboxes; values 31–42, 81, 98.
-- Search-term field (Erweitert tab — preferred since we need district + search): `ctl00$Content$AdvancedSearch1$SearchBox1$txtSearchTerm` (we send empty to fetch all matching the district filter).
-- Pagination via `__doPostBack(eventTarget, eventArgument)` — 10 per page.
+- Detail URL: `https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseDetail.aspx?id=<int>` (singular *Detail*, lowercase `id` query param — verified from the page-1 fixture).
+- District field: `ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$<N>` where N is the *checkbox index*, not the district id. District 31 (Mitte) → index 5. Build the full N→district-id map by parsing `form-initial.html` once at startup, or hardcode after verification.
+- Result rows on `CourseList.aspx`: `<tr class="DataGridItem">` and `<tr class="DataGridAlternatingItem">`; each row contains a link of the shape `CourseDetail.aspx?id=<int>`. 10 results per page. Page label `Seite <N> von <M>` indicates total pages.
 - Availability literals in results: `>2`, `2`, `1`, `belegt`. Waitlist behavior is implicit; not surfaced in row text by default.
 - `robots.txt` blocks only `msnbot/1.0` and `Wdb-Suchportal-Bot` — generic UA fine.
 - Page meta is `nofollow` (soft). No noindex.
@@ -52,8 +67,8 @@
 
 ### Phase 1 — config + storage
 
-- [ ] `src/vhsbot/config.py` — Pydantic Settings or stdlib dataclass; load `.env` via `python-dotenv`; validate `ALLOWED_USER_IDS` is non-empty, `TELEGRAM_BOT_TOKEN` is set, `SCAN_TIME` parses as HH:MM
-- [ ] `src/vhsbot/db.py` — sqlite3 (sync); idempotent `init_schema()`; CRUD for `subscriptions` and `seen_courses`; one global module-level connection guarded by an `asyncio.Lock` (sqlite3 itself is fine for our concurrency)
+- [x] `src/vhsbot/config.py` — stdlib `dataclass`; loads `.env` via `python-dotenv`; validates `ALLOWED_USER_IDS` non-empty, `TELEGRAM_BOT_TOKEN` set, `SCAN_TIME` parses as HH:MM
+- [x] `src/vhsbot/db.py` — sqlite3 (sync); idempotent `init_schema()`; CRUD for `subscriptions`, `user_settings`, `seen_courses`, `notification_log`. **Connection is passed explicitly** to every function (production wires a single connection at startup with `asyncio.Lock` at the call sites; tests pass `:memory:` per test). 22 tests, all green; ruff clean.
 - [ ] Schema:
   ```sql
   CREATE TABLE IF NOT EXISTS subscriptions (

@@ -1,0 +1,766 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<!--20250815 MParzich lang="de" in html eingefuegt-->
+<!--20250815 MParzich https://www.w3.org/1999/xhtml ersetzt durch https://www.w3.org/TR/xhtml1-->
+
+<html xmlns="https://www.w3.org/TR/xhtml1" lang="de">
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=windows-1252">
+
+    
+    <link href="/VHSKURSE/Design/CSS/jquery/ui/themes/cupertino/jquery-ui-1.14.0.custom.min.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/chosen/chosen.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/vhsit.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/tabs.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/my_courses.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/CourseListDataGrid.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/UserLogin.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/NewUserAccount.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/ChangeUserAccount.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/sh/shCore.css" type="text/css" rel="stylesheet" />
+    <link href="/VHSKURSE/Design/CSS/sh/shThemeDefault.css" type="text/css" rel="stylesheet" />
+
+    <script type="text/javascript" src="/VHSKURSE/Design/CSS/sh/shCore.js"></script>
+    <script type="text/javascript" src="/VHSKURSE/Design/CSS/sh/shBrushJScript.js"></script>
+    <script type="text/javascript" src="/VHSKURSE/Design/Scripts/jquery/jquery-3.7.1.min.js"></script>
+    <script type="text/javascript" src="/VHSKURSE/Design/Scripts/jquery/ui/jquery-ui.min.js"></script>
+    <script type="text/javascript" src="/VHSKURSE/Design/Scripts/jquery/datepicker-de.js"></script>
+    <script type="text/javascript" src="/VHSKURSE/Design/Scripts/chosen/chosen.jquery.min.js"></script>
+    <script type="text/javascript" src="/VHSKURSE/Design/Scripts/chosen/chosen.proto.min.js"></script>
+    <script type="text/javascript" src="/VHSKURSE/Design/Scripts/scripts.js"></script>
+
+    <!--[if IE 7]><link href="/VHSKURSE/Design/CSS/ie7.css" type="text/css" rel="stylesheet"/><![endif]-->
+    <title>
+	Die Berliner Volkshochschulen - Kursliste
+</title><meta name="description" content="Kursdatenbank mit Suchmöglichkeit nach allen Kursen der zwölf Volkshochschulen in Berlin und der Möglichkeit zur Online-Anmeldung." /><meta name="author" content="Geschaeftsstelle VHS-IT" /><meta name="keywords" content="Berliner Volkshochschulen, Volkshochschule, Kurssuche" /><meta name="robots" content="nofollow" />
+    <!-- Google Search Console -->
+    <meta name="google-site-verification" content="6X3Fg3TwaO4hqnBLLkcaNlU0bAu_S24zRwKbrA4YaWk" />
+
+    <!-- Important: Don't remove the following Tag. It's important for Parametersearch over URL !!!-->
+    <meta http-equiv="expires" content="0" />
+
+
+    <script type="text/javascript" async="" src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/4106.js"></script>
+
+    <!-- Piwik deaktiviert VHS-IT 20150720
+    <script src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/piwik.js" async="" defer="defer" type="text/javascript"></script>
+    -->
+
+    <script type="text/javascript">
+        window.SDM_portwidth = '1037px';
+    </script>
+    <meta name="viewport" content="width=device-width">
+
+    <!--[if (gte IE 6)|!(IE)]><!-->
+    <link rel="stylesheet" type="text/css" href="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/bde_2010.css">
+    <!--<![endif]-->
+
+    <link rel="shortcut icon" href="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/iphone.png" type="image/png">
+    <meta property="og:image" content="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/facebook_default_icon_land.png">
+    <meta property="og:image:secure_url" content="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/facebook_default_icon_land.png">
+
+    <!--20250813    MParzich    Folgeabschnitt mit dart.fcgi deaktiviert -->
+    <!--<script type="text/javascript">/*<![CDATA[*/document.write('<'+'script src="https://www.berlin.de/.adserv/_bin/dart.fcgi?mobile=0&u='+escape(document.location.href)+'"></'+'script>');/*]]>*/</script><script src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/dart.fcgi"></script>-->
+    <!--[if gte IE 7]><!-->
+    <script type="text/javascript" src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/jquery.js"></script>
+    <script type="text/javascript">jQuery.noConflict();</script>
+    <script type="text/javascript" src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/behavior.js"></script>
+    <!--<![endif]-->
+    <!-- gaq disabled -->
+
+    <link rel="stylesheet" type="text/css" href="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/bde_2010_land.css">
+    <script src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/a.js" type="text/javascript"></script>
+    <script src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/tx.js" type="text/javascript"></script>
+
+</head>
+<body>
+
+
+    <div id="cp">
+        <!--20250813    MParzich    Folgeabschnitt mit boss.berlinonline deaktiviert -->
+        <!--<script type="text/javascript">/*<![CDATA[*/
+        if (typeof DartIvwKategorie !== "string") window.DartIvwKategorie = "boUndefined";
+        var CP = "//boss.berlinonline.de/cp.php?a=berlin&amp;r="+escape(document.referrer)+"&amp;cat="+DartIvwKategorie+"&amp;d="+(Math.random()*100000);
+        document.write("<img src=\""+CP+"\" width=\"1\" height=\"1\" alt=\"\" id=\"cp_pixel\" style=\"position:absolute;width:1px;height:1px;\"/>");
+        /*]]>*/</script>-->
+        <!--<img src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/cp.gif" alt="Ein schwarzer Punkt" id="cp_pixel" style="position:absolute;width:1px;height:1px;" height="1" width="1"> -->
+        <!--20250813    MParzich    Folgeabschnitt mit boss.berlinonline deaktiviert -->
+        <!--<noscript><div><img src="//boss.berlinonline.de/cp.php?a=berlin&amp;r=(none)" alt=""/></div></noscript>-->
+
+        <div id="ivw">
+
+            <!-- szm pixel desktop variante -->
+            <!-- SZM VERSION="2.0" -->
+            <!--20250812    MParzich    Verweis auf iam.js auskommentiert-->
+            <!--<script type="text/javascript" src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/iam.js"></script>-->
+            <!--<script type="text/javascript">
+                var iam_data = {
+                    "mg": "yes",
+                    "cp": DartIvwKategorie,
+                    "st": "berlin",
+                    "sv": (location.pathname == "/" ? "ke" : "in"),
+                    "co": location.hostname
+                }
+                iom.c(iam_data, 1);
+            </script>-->
+            <!-- /SZM -->
+
+        </div>
+
+    </div>
+
+    <!-- Server: 212.45.105.232 Layout: bde_2010_old_land_abs -->
+    <!-- Piwik -->
+    <!-- Piwik deaktiviert VHS-IT 20150720
+    <script type="text/javascript">
+    var _paq = _paq || [];
+    _paq.push(["setDocumentTitle", document.domain + "/" + document.title]);
+    _paq.push(["setCookieDomain", "*.berlinonline.de"]);
+    _paq.push(["trackPageView"]);
+    _paq.push(["enableLinkTracking"]);
+    (function() {
+    var u=(("https:" == document.location.protocol) ? "https" : "http") + "://piwik.berlinonline.de/";
+    _paq.push(["setTrackerUrl", u+"piwik.php"]);
+    _paq.push(["setSiteId", "1"]);
+    var d=document, g=d.createElement("script"), s=d.getElementsByTagName("script")[0]; g.type="text/javascript";
+    g.defer=true; g.async=true; g.src=u+"piwik.js"; s.parentNode.insertBefore(g,s);
+    })();
+    </script>
+    -->
+    <!-- End Piwik Code -->
+
+    <div id="banner_placeholder">
+    </div>
+
+    <!--[if IE 7]>
+    <div id="bo_page" class="ie7 lang-de">
+    <![endif]-->
+    <!--[if IE 8]>
+    <div id="bo_page" class="ie8 lang-de">
+    <![endif]-->
+    <!--[if (gt IE 8)|!(IE)]><!-->
+    <div id="bo_page" class="non-ie lang-de">
+        <!--<![endif]-->
+
+        <div id="bo_container">
+
+            <div id="bo_header" class="blocklinks noimgborder">
+                <a href="https://www.berlin.de" rel="home" id="home" hreflang="de"><img src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/berlin_de.svg" alt="Logo Berlin.de" height="33" width="100"></a>
+                <form action="https://www.berlin.de/suche/" method="get" id="search">
+                    <input name="q" placeholder="Suche" type="text">
+                    <button type="submit">Suche</button>
+                </form>
+
+                <div id="mobile_main_navigation">
+                    <ul><li class="first"><a class="openmainnav" href="#" target="_top">Alle Rubriken</a></li></ul>
+                </div>
+                <div id="main_navigation">
+                    <ul class="horizontal navigation">
+                        <li class="active">
+                            <a href="https://www.berlin.de/rubrik/politik-und-verwaltung/">Politik, Verwaltung, B&uuml;rger</a>
+                            <ul class="horizontal sub"><li><a href="https://www.berlin.de/rbmskzl/">Der Regierende B&uuml;rgermeister</a></li><li><a href="https://service.berlin.de/senatsverwaltungen/">Senatsverwaltungen</a></li><li><a href="https://service.berlin.de/bezirksaemter/">Bezirks&auml;mter</a></li><li><a href="https://www.berlin.de/presse/">Presse</a></li><li><a href="https://service.berlin.de/">Service-Portal</a></li><li><a href="https://www.parlament-berlin.de/de/Startseite">Abgeordnetenhaus</a></li></ul>
+                        </li>
+                        <li>
+                            <a href="https://www.berlin.de/kultur-und-tickets/">Kultur &amp; Ausgehen</a>
+                            <ul class="horizontal sub"><li><a href="https://www.berlin.de/tickets/" target="_top">Veranstaltungen</a></li><li><a href="https://www.berlin.de/events/" target="_top">Eventvorschau</a></li><li><a href="https://www.berlin.de/tickets/shop/" target="_top">Ticketshop</a></li><li><a href="https://www.berlin.de/kino/_bin/index.php" target="_top">Kino</a></li><li><a href="https://www.berlin.de/museum/" target="_top">Museen</a></li><li><a href="https://www.berlin.de/orte/club/" target="_top">Clubs</a></li><li><a href="https://www.berlin.de/orte/kultur/" target="_top">Kulturorte</a></li><li><a href="https://www.berlin.de/restaurants/" target="_top">Essen &amp; Trinken</a></li><li><a href="https://www.berlin.de/orte/" target="_top">Adressen</a></li></ul>
+                        </li>
+                        <li>
+                            <a href="https://www.berlin.de/tourismus/">Tourismus</a>
+                            <ul class="horizontal sub"><li><a href="https://www.berlin.de/tourismus/unterkunft/hotels/">Hotels</a></li><li><a href="https://www.berlin.de/tourismus/unterkunft/pensionen/">Pensionen</a></li><li><a href="https://www.berlin.de/tourismus/sightseeing/">Sightseeing</a></li><li><a href="https://www.berlin.de/tourismus/dampferfahrten/">Schiffstouren</a></li><li><a href="https://www.berlin.de/tourismus/stadtfuehrungen/">Stadtf&uuml;hrungen</a></li><li><a href="https://www.berlin.de/special/shopping/">Shopping</a></li><li><a href="https://www.berlin.de/restaurants/">Restaurants</a></li></ul>
+                        </li>
+                        <li>
+                            <a href="https://www.berlin.de/wirtschaft/">Wirtschaft</a>
+                            <ul class="horizontal sub"><li><a href="https://www.berlin.de/wirtschaft/wirtschaftsstandort/" target="_top">Wirtschaftsstandort</a></li><li><a href="https://www.berlin.de/wirtschaft/start-up-metropole/" target="_top">Gr&uuml;nden</a></li><li><a href="https://www.berlin.de/wirtschaft/investieren-in-berlin/" target="_top">Investieren</a></li><li><a href="https://www.berlin.de/wirtschaft/wissenschaft-und-innovation/" target="_top">Innovationsstandort</a></li><li><a href="https://www.berlin.de/wirtschaft/aussenwirtschaft/" target="_top">Internationales</a></li><li><a href="https://www.berlin.de/wirtschaft/service/" target="_top">Service</a></li></ul>
+                        </li>
+                        <li>
+                            <a href="https://www.berlin.de/special/">Themen</a>
+                            <ul class="horizontal sub"><li><a href="https://www.berlin.de/special/auto-und-motor/" target="_top">Auto &amp; Motor</a></li><li><a href="https://www.berlin.de/special/gesundheit-und-beauty/" target="_top">Gesundheit &amp; Beauty</a></li><li><a href="https://www.berlin.de/special/immobilien-und-wohnen/" target="_top">Immobilien &amp; Wohnen</a></li><li><a href="https://www.berlin.de/special/jobs-und-ausbildung/" target="_top">Jobs &amp; Ausbildung</a></li><li><a href="https://www.berlin.de/special/reise/" target="_top">Reisen &amp; Ausfl&uuml;ge</a></li><li><a href="https://www.berlin.de/special/shopping/" target="_top">Shopping</a></li><li><a href="https://www.berlin.de/special/sport-und-fitness/" target="_top">Sport &amp; Freizeit</a></li></ul>
+                        </li>
+                    </ul><div id="bo_supernavigation"><!-- --></div>
+                </div>
+
+            </div>
+
+
+            
+    <form method="post" action="./CourseList.aspx" id="aspnetForm">
+<div class="aspNetHidden">
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="/wEPDwUJNjc1MDg0OTc0D2QWAmYPZBYCAgEPZBYGZg9kFgICAQ9kFhYCAQ8WAh4HVmlzaWJsZWgWAgIBDw8WAh4EVGV4dGVkZAIDD2QWAgIBDw8WAh8BBQlLdXJzc3VjaGVkZAIFD2QWAgIBDw8WBh8BBQ1XYXJlbmtvcmIgKDApHghDc3NDbGFzcwUSTGlua0J1dHRvbkRpc2FibGVkHgRfIVNCAgIWAh4HT25DbGljawUNcmV0dXJuIGZhbHNlO2QCBw9kFgICAQ8PFgIfAQUKTWVpbiBLb250b2RkAgkPFgIfAGgWAgIBDw8WAh8BBQtNZWluZSBLdXJzZRYCHwQFDXJldHVybiBmYWxzZTtkAgsPFgIfAGgWAgIBDw8WAh8AaGRkAg0PZBYCAgEPDxYCHwEFBUxvZ2luZGQCDw9kFgICAQ8PFgIfAQUSSmV0enQgcmVnaXN0cmllcmVuZGQCEQ9kFgICAQ8PFgIfAQUSUGFzc3dvcnQgdmVyZ2Vzc2VuZGQCEw8WAh8AaBYCAgEPDxYCHwFlZGQCFQ8WAh8AaBYCAgEPDxYCHwEFCUt1cnNzdWNoZWRkAgEPFgIfAGgWAgIBD2QWAmYPDxYCHwEFD1p1ciBLYXNzZSBnZWhlbmRkAgIPZBYcAgMPDxYCHwEFCUt1cnNsaXN0ZWRkAgUPDxYEHwEFIlNpZSBoYWJlbiBrZWluZW4gS3VycyBhdXNnZXfDpGhsdCEfAGhkZAIHDw8WBB8BBTNJaHIgcHJvdmlzb3Jpc2NoZXIgU3RhdHVzIGVybGF1YnQgbnVyIGVpbmUgQnVjaHVuZyEfAGhkZAIJDw8WBB8BBbABRWluIHZvbiBJaG5lbiBhdXNnZXfDpGhsdGVyIEt1cnMgaXN0IG51ciBtaXQgQmVyYXR1bmcgYnVjaGJhci4gRWluZSBPbmxpbmUtQnVjaHVuZyBpc3QgbmljaHQgbcO2Z2xpY2guIEJpdHRlIHNldHplbiBTaWUgc2ljaCBtaXQgZGVyIGRlbiBLdXJzIGR1cmNoZsO8aHJlbmRlbiBWSFMgaW4gVmVyYmluZHVuZy4fAGhkZAILDw8WBB8BBS5EaWUgYXVzZ2V3w6RobHRlbiBLdXJzZSBleGlzdGllcmVuIG5pY2h0IG1laHIhHwBoZGQCDQ8PFgIfAQUQQW56YWhsIFRyZWZmZXI6IGRkAg8PDxYCHwEFFEFuemFobCBUcmVmZmVyOiAgMzEyZGQCEQ8PFgIfAQURS3Vyc3N1Y2hlIMOkbmRlcm5kZAITDw8WAh8BBRRUcmVmZmVybGlzdGUgYWxzIFBERmRkAhUPEGRkFgFmZAIXDzwrAAsCAA8WDh4IRGF0YUtleXMWCgLqry8CnY4vAuHxLgLo9C4CyfEuAoiALgKlhy4CmJIuArHyLgKf+S4eDlNlbGVjdGVkUm93S2V5ZR4NU2VsZWN0ZWRJbmRleAL/////Dx4QQ3VycmVudFBhZ2VJbmRleAIBHgtfIUl0ZW1Db3VudAIKHhVfIURhdGFTb3VyY2VJdGVtQ291bnQCuAIeCVBhZ2VDb3VudAIgZAEUKwAOPCsABAEAFgIfAGc8KwAEAQAWAh8AZzwrAAQBABYEHgpIZWFkZXJUZXh0BQZCZXppcmsfAGc8KwAEAQAWBB8MBQpLdXJzbnVtbWVyHwBnPCsABAEAFgQfDAUJS3Vyc3RpdGVsHwBnPCsABAEAFgQfDAUGQmVnaW5uHwBnPCsABAEAFgQfDAUNZnJlaWUgUGzDpHR6ZR8AZzwrAAQBABYEHwwFB0hpbndlaXMfAGc8KwAEAQAWBB8MBQdFbnRnZWx0HwBnPCsABAEAFgIfAGg8KwAEAQAWAh8AaDwrAAQBABYCHwBoPCsABAEAFgIfAGg8KwAEAQAWAh8AaBYCZg9kFhQCAg9kFhxmD2QWBAIDDw8WAh8AZ2RkAgUPDxYCHwBoZGQCAQ9kFgQCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgIPDxYCHwEFBU1pdHRlZGQCAw8PFgIfAQUNTWk0MDQtTDAyMFMtNWRkAgQPZBYCZg8PFgQfAQUdRGV1dHNjaCBJbnRlZ3JhdGlvbnNrdXJzIEIxLjEeC05hdmlnYXRlVXJsBRtDb3Vyc2VEZXRhaWwuYXNweD9pZD03NzYxNzBkZAIFDw8WAh8BBRUyOS4wNS4yMDI2DQowODozMCBVaHJkZAIGDw8WAh8BBQZiZWxlZ3RkZAIHDw8WAh8BBShudXIgbWl0IEJlcmF0dW5nIGR1cmNoIGF1c2YuIFZIUyBidWNoYmFyZGQCCA8PFgIfAQUL4oKsIDIzNS4wMCBkZAIJDw8WAh8BBRMyNS4wNi4yMDI2IDEyOjQ1OjAwZGQCCg9kFhYCAQ8PFgIfAQUdRGV1dHNjaCBJbnRlZ3JhdGlvbnNrdXJzIEIxLjFkZAIDDw8WAh8BBRJBdWZiYXVrdXJzIE1vZHVsIDVkZAIFDw8WAh8BBYoHRGllc2VyIEt1cnMgaXN0IFRlaWwgZWluZXMgSW50ZWdyYXRpb25za3Vyc2VzIGdlbcOkw58gwqc0MyBBdWZlbnRoYWx0c2dlc2V0ei4NCg0KRGVyIGFsbGdlbWVpbmUgSW50ZWdyYXRpb25za3VycyB1bWZhc3N0IDcwMCBVbnRlcnJpY2h0c3N0dW5kZW4gdW5kIGhhdCB6dW0gWmllbCwgaW4gNjAwIFVudGVycmljaHRzc3R1bmRlbiBEZXV0c2Noa2VubnRuaXNzZSBhdWYgZGVtIE5pdmVhdSBCMSBkZXMgR2VtZWluc2FtZW4gRXVyb3DDpGlzY2hlbiBSZWZlcmVuenJhaG1lbnMgKEdFUikgc293aWUgaW4gMTAwIFVudGVycmljaHRzc3R1bmRlbiBLZW5udG5pc3NlIGRlciBSZWNodHNvcmRudW5nLCBLdWx0dXIgdW5kIEdlc2NoaWNodGUgaW4gRGV1dHNjaGxhbmQgenUgdmVybWl0dGVsbi4gRGVyIEVyd2VyYiBkZXIgRGV1dHNjaGtlbm50bmlzc2UgZ2VzY2hpZWh0IGFuaGFuZCB2b24gYWxsdGFnc2Jlem9nZW5lbiBJbmhhbHRlbiB3aWUgQXJiZWl0LCBXb2huZW4sIEdlc3VuZGhlaXQgb2RlciDDhG10ZXIgdW5kIEJlaMO2cmRlbi4gSW0gMTAwIFVudGVycmljaHRzc3R1bmRlbiB1bWZhc3NlbmRlbiBPcmllbnRpZXJ1bmdza3VycyB3ZXJkZW4gZGllIFRoZW1lbmJlcmVpY2hlIFBvbGl0aWsgaW4gZGVyIERlbW9rcmF0aWUsIEdlc2NoaWNodGUgdW5kIFZlcmFudHdvcnR1bmcgc293aWUgTWVuc2NoIHVuZCBHZXNlbGxzY2hhZnQgYmVoYW5kZWx0LiBEZXIgYWxsZ2VtZWluZSBJbnRlZ3JhdGlvbnNrdXJzIHNjaGxpZcOfdCBtaXQgZGVuIGJlaWRlbiBza2FsaWVydGVuIEFic2NobHVzc3Rlc3RzIOKAnkRldXRzY2gtVGVzdCBmw7xyIFp1d2FuZGVyZXLigJwgKERUWikgdW5kIOKAnkxlYmVuIGluIERldXRzY2hsYW5k4oCcIChMaUQpIGFiLiAgDQoNCkxlaHJidWNoOiBTY2hyaXR0ZSBwbHVzIE5ldSA1ZGQCBw8PFgIfAQXwAUVudGdlbHRlIGbDvHIgVGVpbG5laG1lbmRlIG1pdCBCQU1GLUbDtnJkZXJ1bmcgKFZvbGx6YWhsZXIpOiBBbm1lbGR1bmcgenVtIEludGVncmF0aW9uc2t1cnMgYWIgZGVtIDAxLjAxLjIwMjE6IOKCrCAyMjAsLTsgQW5tZWxkdW5nIHp1bSBJbnRlZ3JhdGlvbnNrdXJzIGFiIGRlbSAwMS4wOC4yMDIyOiDigqwgMjI5LC0gOyBFbnRnZWx0IGbDvHIgU2VsYnN0emFobGVyIG9obmUgQkFNRi1Gw7ZyZGVydW5nIOKCrCAyMzUsLWRkAgsPDxYCHwEFDU1pNDA0LUwwMjBTLTVkZAIPDw8WAh8BBTJIYXJ0bWFubiwgRGlldGVyOyBMw7xwa2UsIE5pY29sYTsgUGVobGtlLCBEb3JvdGhlZWRkAhMPDxYCHwEFIzI5LjA1LjIwMjYgMDg6MzAgLSAyNS4wNi4yMDI2IDEyOjQ1ZGQCGQ8PFgIfAQUDMTAwZGQCHQ8PFgIfAQUKMTEgLSAyMiBUTmRkAiEPDxYCHwEFC+KCrCAyMzUuMDAgZGQCIw8PFgIfAQUvVkhTIEV0YWdlbiwgMTA1NTEgQmVybGluLCBUdXJtc3RyLiA3NSwgUmF1bSAzMDFkZAILD2QWCgIBDw8WAh8BBR1EZXV0c2NoIEludGVncmF0aW9uc2t1cnMgQjEuMWRkAgMPDxYCHwEFEkF1ZmJhdWt1cnMgTW9kdWwgNWRkAgUPDxYCHwEFigdEaWVzZXIgS3VycyBpc3QgVGVpbCBlaW5lcyBJbnRlZ3JhdGlvbnNrdXJzZXMgZ2Vtw6TDnyDCpzQzIEF1ZmVudGhhbHRzZ2VzZXR6Lg0KDQpEZXIgYWxsZ2VtZWluZSBJbnRlZ3JhdGlvbnNrdXJzIHVtZmFzc3QgNzAwIFVudGVycmljaHRzc3R1bmRlbiB1bmQgaGF0IHp1bSBaaWVsLCBpbiA2MDAgVW50ZXJyaWNodHNzdHVuZGVuIERldXRzY2hrZW5udG5pc3NlIGF1ZiBkZW0gTml2ZWF1IEIxIGRlcyBHZW1laW5zYW1lbiBFdXJvcMOkaXNjaGVuIFJlZmVyZW56cmFobWVucyAoR0VSKSBzb3dpZSBpbiAxMDAgVW50ZXJyaWNodHNzdHVuZGVuIEtlbm50bmlzc2UgZGVyIFJlY2h0c29yZG51bmcsIEt1bHR1ciB1bmQgR2VzY2hpY2h0ZSBpbiBEZXV0c2NobGFuZCB6dSB2ZXJtaXR0ZWxuLiBEZXIgRXJ3ZXJiIGRlciBEZXV0c2Noa2VubnRuaXNzZSBnZXNjaGllaHQgYW5oYW5kIHZvbiBhbGx0YWdzYmV6b2dlbmVuIEluaGFsdGVuIHdpZSBBcmJlaXQsIFdvaG5lbiwgR2VzdW5kaGVpdCBvZGVyIMOEbXRlciB1bmQgQmVow7ZyZGVuLiBJbSAxMDAgVW50ZXJyaWNodHNzdHVuZGVuIHVtZmFzc2VuZGVuIE9yaWVudGllcnVuZ3NrdXJzIHdlcmRlbiBkaWUgVGhlbWVuYmVyZWljaGUgUG9saXRpayBpbiBkZXIgRGVtb2tyYXRpZSwgR2VzY2hpY2h0ZSB1bmQgVmVyYW50d29ydHVuZyBzb3dpZSBNZW5zY2ggdW5kIEdlc2VsbHNjaGFmdCBiZWhhbmRlbHQuIERlciBhbGxnZW1laW5lIEludGVncmF0aW9uc2t1cnMgc2NobGllw590IG1pdCBkZW4gYmVpZGVuIHNrYWxpZXJ0ZW4gQWJzY2hsdXNzdGVzdHMg4oCeRGV1dHNjaC1UZXN0IGbDvHIgWnV3YW5kZXJlcuKAnCAoRFRaKSB1bmQg4oCeTGViZW4gaW4gRGV1dHNjaGxhbmTigJwgKExpRCkgYWIuICANCg0KTGVocmJ1Y2g6IFNjaHJpdHRlIHBsdXMgTmV1IDVkZAIHDw8WAh8BBfABRW50Z2VsdGUgZsO8ciBUZWlsbmVobWVuZGUgbWl0IEJBTUYtRsO2cmRlcnVuZyAoVm9sbHphaGxlcik6IEFubWVsZHVuZyB6dW0gSW50ZWdyYXRpb25za3VycyBhYiBkZW0gMDEuMDEuMjAyMTog4oKsIDIyMCwtOyBBbm1lbGR1bmcgenVtIEludGVncmF0aW9uc2t1cnMgYWIgZGVtIDAxLjA4LjIwMjI6IOKCrCAyMjksLSA7IEVudGdlbHQgZsO8ciBTZWxic3R6YWhsZXIgb2huZSBCQU1GLUbDtnJkZXJ1bmcg4oKsIDIzNSwtZGQCCw8PFgIfAQUNTWk0MDQtTDAyMFMtNWRkAgwPDxYCHwEFBjc3NjE3MGRkAg0PDxYCHwEFBiZuYnNwO2RkAgMPZBYcZg9kFgYCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgUPDxYCHwBoZGQCAQ9kFgQCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgIPDxYCHwEFBU1pdHRlZGQCAw8PFgIfAQUKTWk0MjgtOTI1U2RkAgQPZBYCZg8PFgQfAQUmR2Viw6RyZGVuc3ByYWNoZSAtIERHUyAxMCBhbSBWb3JtaXR0YWcfDQUbQ291cnNlRGV0YWlsLmFzcHg/aWQ9NzcxODY5ZGQCBQ8PFgIfAQUVMjkuMDUuMjAyNg0KMDk6MzAgVWhyZGQCBg8PFgIfAQUDPiAyZGQCBw8PFgIfAQUGJm5ic3A7ZGQCCA8PFgIfAQUf4oKsIDg5LjAwPGJyIC8+KGVybS4g4oKsIDQ5LjUwKWRkAgkPDxYCHwEFEzI2LjA2LjIwMjYgMTI6NDU6MDBkZAIKD2QWFgIBDw8WAh8BBSZHZWLDpHJkZW5zcHJhY2hlIC0gREdTIDEwIGFtIFZvcm1pdHRhZ2RkAgMPDxYCHwFlZGQCBQ8PFgIfAQWjBEjDtnJlbmRlIGxlcm5lbiBoaWVyIGRpZSBTcHJhY2hlIHVuZCBMZWJlbnN3ZWx0IGRlciBHZWjDtnJsb3NlbiBrZW5uZW4uIFNpZSB3ZXJkZW4gdm9uIGRlbiBnZWjDtnJsb3NlbiBLdXJzbGVpdGVuZGVuIFNjaHJpdHQgZsO8ciBTY2hyaXR0IGluIGRpZSBsYXV0bG9zZSBLb21tdW5pa2F0aW9uIG1pdCBIw6RuZGVuLCBHZXNpY2h0IHVuZCBLw7ZycGVyIGVpbmdlZsO8aHJ0Lg0KVm9yYXVzc2V0enVuZzogS2VubnRuaXNzZSB1bmQgRsOkaGlna2VpdGVuIGRlcyBLdXJzZXMgR2Viw6RyZGVuc3ByYWNoZSBER1MgOS4NCg0KTmF0YWxpYSBIb2xtLCBnZWJvcmVuIGluIE9tc2ssIGlzdCB6ZXJ0aWZpemllcnRlIEdlYsOkcmRlbnNwcmFjaGRvemVudGluLCBpaHJlIGJlaWRlbiBNdXR0ZXJzcHJhY2hlbiBzaW5kIGRpZSBkZXV0c2NoZSB1bmQgZGllIHJ1c3Npc2NoZSBHZWLDpHJkZW5zcHJhY2hlLiBTaWUgdW50ZXJyaWNodGV0IHNlaXQgQXByaWwgMjAxNiBpbiBkZXIgVm9sa3Nob2Noc2NodWxlIEJlcmxpbiBNaXR0ZS4NCg0KV2lyIGZyZXVlbiB1bnMgYXVmIFNpZSFkZAIHDw8WAh8BBaoCQml0dGUgYmVzdWNoZW4gU2llIHVuc2VyZSBTcHJhY2hrdXJzYmVyYXR1bmcgLSBrb3N0ZW5sb3MsIGluZGl2aWR1ZWxsIHVuZCBvbmxpbmUuIEFsbGUgVGVybWluZSBmaW5kZW4gU2llIGhpZXI6IHd3dy5iZXJsaW4uZGUvdmhzbWl0dGUtc3ByYWNoa3Vyc2JlcmF0dW5nLiBBdcOfZXJoYWxiIGRpZXNlciBUZXJtaW5lIGlzdCBsZWlkZXIga2VpbmUgQmVyYXR1bmcgbcO2Z2xpY2guIE1laHIgSW5mb3MgenVtIFNwcmFjaGVuYW5nZWJvdCBmaW5kZW4gU2llIGhpZXI6IHd3dy5iZXJsaW4uZGUvdmhzbWl0dGUtc3ByYWNoZW4uIGRkAgsPDxYCHwEFCk1pNDI4LTkyNVNkZAIPDw8WAh8BBQ1Ib2xtLCBOYXRhbGlhZGQCEw8PFgIfAQUjMjkuMDUuMjAyNiAwOTozMCAtIDI2LjA2LjIwMjYgMTI6NDVkZAIZDw8WAh8BBQIyMGRkAh0PDxYCHwEFCTYgLSAxMiBUTmRkAiEPDxYCHwEFGuKCrCA4OS4wMCAoZXJtLiDigqwgNDkuNTApZGQCIw8PFgIfAQU5VkhTIEJlcmxpbiBNaXR0ZSwgMTAxMTUgQmVybGluLCBMaW5pZW5zdHIuIDE2MiwgUmF1bSA0LjA0ZGQCCw9kFgoCAQ8PFgIfAQUmR2Viw6RyZGVuc3ByYWNoZSAtIERHUyAxMCBhbSBWb3JtaXR0YWdkZAIDDw8WAh8BZWRkAgUPDxYCHwEFowRIw7ZyZW5kZSBsZXJuZW4gaGllciBkaWUgU3ByYWNoZSB1bmQgTGViZW5zd2VsdCBkZXIgR2Vow7ZybG9zZW4ga2VubmVuLiBTaWUgd2VyZGVuIHZvbiBkZW4gZ2Vow7ZybG9zZW4gS3Vyc2xlaXRlbmRlbiBTY2hyaXR0IGbDvHIgU2Nocml0dCBpbiBkaWUgbGF1dGxvc2UgS29tbXVuaWthdGlvbiBtaXQgSMOkbmRlbiwgR2VzaWNodCB1bmQgS8O2cnBlciBlaW5nZWbDvGhydC4NClZvcmF1c3NldHp1bmc6IEtlbm50bmlzc2UgdW5kIEbDpGhpZ2tlaXRlbiBkZXMgS3Vyc2VzIEdlYsOkcmRlbnNwcmFjaGUgREdTIDkuDQoNCk5hdGFsaWEgSG9sbSwgZ2Vib3JlbiBpbiBPbXNrLCBpc3QgemVydGlmaXppZXJ0ZSBHZWLDpHJkZW5zcHJhY2hkb3plbnRpbiwgaWhyZSBiZWlkZW4gTXV0dGVyc3ByYWNoZW4gc2luZCBkaWUgZGV1dHNjaGUgdW5kIGRpZSBydXNzaXNjaGUgR2Viw6RyZGVuc3ByYWNoZS4gU2llIHVudGVycmljaHRldCBzZWl0IEFwcmlsIDIwMTYgaW4gZGVyIFZvbGtzaG9jaHNjaHVsZSBCZXJsaW4gTWl0dGUuDQoNCldpciBmcmV1ZW4gdW5zIGF1ZiBTaWUhZGQCBw8PFgIfAQWqAkJpdHRlIGJlc3VjaGVuIFNpZSB1bnNlcmUgU3ByYWNoa3Vyc2JlcmF0dW5nIC0ga29zdGVubG9zLCBpbmRpdmlkdWVsbCB1bmQgb25saW5lLiBBbGxlIFRlcm1pbmUgZmluZGVuIFNpZSBoaWVyOiB3d3cuYmVybGluLmRlL3Zoc21pdHRlLXNwcmFjaGt1cnNiZXJhdHVuZy4gQXXDn2VyaGFsYiBkaWVzZXIgVGVybWluZSBpc3QgbGVpZGVyIGtlaW5lIEJlcmF0dW5nIG3DtmdsaWNoLiBNZWhyIEluZm9zIHp1bSBTcHJhY2hlbmFuZ2Vib3QgZmluZGVuIFNpZSBoaWVyOiB3d3cuYmVybGluLmRlL3Zoc21pdHRlLXNwcmFjaGVuLiBkZAILDw8WAh8BBQpNaTQyOC05MjVTZGQCDA8PFgIfAQUGNzcxODY5ZGQCDQ8PFgIfAQUGJm5ic3A7ZGQCBA9kFhxmD2QWBAIDDw8WAh8AZ2RkAgUPDxYCHwBoZGQCAQ9kFgQCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgIPDxYCHwEFBU1pdHRlZGQCAw8PFgIfAQUKTWkxMDktMTAwRmRkAgQPZBYCZg8PFgQfAQU1Q29va2luZyBmb3IgUGVhY2UgS29jaGFiZW5kOiBBbHQgJiBOZXUtQmVybGluZXIqaW5uZW4fDQUbQ291cnNlRGV0YWlsLmFzcHg/aWQ9NzY4MjI1ZGQCBQ8PFgIfAQUVMjkuMDUuMjAyNg0KMTg6MDAgVWhyZGQCBg8PFgIfAQUBMmRkAgcPDxYCHwEFGG51ciBtaXQgQmVyYXR1bmcgYnVjaGJhcmRkAggPDxYCHwEFH+KCrCAyMC4wMDxiciAvPihlcm0uIOKCrCAyMC4wMClkZAIJDw8WAh8BBRMyOS4wNS4yMDI2IDIxOjAwOjAwZGQCCg9kFhYCAQ8PFgIfAQU1Q29va2luZyBmb3IgUGVhY2UgS29jaGFiZW5kOiBBbHQgJiBOZXUtQmVybGluZXIqaW5uZW5kZAIDDw8WAh8BZWRkAgUPDxYCHwEFoQdBbiBkaWVzZW4gQWJlbmRlbiB3ZXJkZW4gc2VjaHMgR2VmbMO8Y2h0ZXRlIG9kZXIgYW5kZXJlIE5ldS1CZXJsaW5lcippbm5lbiBtaXQgc2VjaHMgQWx0LUJlcmxpbmVybippbm5lbiB6dXNhbW1lbiBrb2NoZW4uIEdlcmljaHRlIGF1cyBkZXIgSGVpbWF0IGRlciBOZXUtQmVybGluZXIqaW5uZW4gd2VyZGVuIGF1ZiBkZW0gU3BlaXNlcGxhbiBzdGVoZW4uIE5ldS1CZXJsaW5lcippbm5lbiBzaW5kIGRpZWplbmlnZW4sIGRpZSBlaW4gZXhvdGlzY2hlcyBSZXplcHQgZWluYnJpbmdlbi4NCkFuIGRpZXNlbSBLb2NoYWJlbmQgc2luZCBzaWUgR2FzdGdlYmVyKmlubmVuIHN0YXR0IEfDpHN0ZS4gDQpDaXNrYSBKYW5zZW4sIEdyw7xuZGVyaW4gZGVyIEtvY2hha3Rpb25zZ3J1cHBlIENvb2tpbmcgZm9yIFBlYWNlIHdpcmQgZGllIFJlZ2llIMO8YmVybmVobWVuIHVuZCB3aXIga8O2bm5lbiBnZXdpc3Mgc2VpbjogRXMgd2lyZCBoZXJybGljaCBkdWZ0ZW4sIHNjaG1lY2tlbiB1bmQgaW50ZXJlc3NhbnRlIEdlc3Byw6RjaGUgZ2ViZW4uIFdlbm4gU2llIGRhYmVpIHNlaW4gd29sbGVuLCBtZWxkZW4gU2llIHNpY2ggYW4sIGVzIGVudHN0ZWhlbiBmw7xyIFNpZSBudXIgS29zdGVuIGbDvHIgZGFzIEVzc2VuLg0KDQpDaXNrYSBKYW5zZW4gaXN0IE5pZWRlcmzDpG5kZXJpbiBtaXQgaW5kb25lc2lzY2hlbiBXdXJ6ZWxuLiBTaWUgYmlldGV0IG5pY2h0IG51ciBpbmRvbmVzaXNjaGUgS29jaGt1cnNlLCBDYXRlcmluZ3MgdW5kIERpbm5lcnMgYW4uIEFscyBLb2NoYWt0aXZpc3RpbiBiZWtvbW10IElocmUgTGVpZGVuc2NoYWZ0IGVyc3QgRmzDvGdlbCwgd2VubiBzaWUgaW4gdW5zZXJlciB0dXJidWxlbnRlbiBXZWx0IEtvY2hlbiB1bmQgRXNzZW4gbWl0IEhlcnosIE1pdGdlZsO8aGwgdW5kIFNvbGlkYXJpdMOkdCBrb21iaW5pZXJlbiBrYW5uLmRkAgcPDxYCHwEF2QJFcyBnaWJ0IGtlaW5lIEt1cnNnZWLDvGhyLiBGw7xyIHZlcndlbmRldGUgWnV0YXRlbiBzaW5kIDIwIOKCrCBpbSBLdXJzZW50Z2VsdCBlbnRoYWx0ZW4uIEplZGVyIFRlaWxuZWhtZW5kZSB6YWhsdCBqZSAxMCDigqwgZsO8ciBzZWluIEVzc2VuIHVuZCBkYXMgZWluZXMgR2VmbMO8Y2h0ZXRlbi8gTmV1LUJlcmxpbmVycy4gQmVpIGVpbmVyIGt1cnpmcmlzdGlnZW4gU3Rvcm5pZXJ1bmcgYWIgZGVtIDMuIFRhZyB2b3IgS3Vyc2JlZ2lubiB3aXJkIGRpZXNlciBuaWNodCBlcnN0YXR0ZXQuDQpCaXR0ZSBCcmV0dGNoZW4sIE1lc3NlciwgU2Now7xyemUgdW5kIEdlc2NoaXJydHVjaCBtaXRicmluZ2VuLg0KDQpkZAILDw8WAh8BBQpNaTEwOS0xMDBGZGQCDw8PFgIfAQUNSmFuc2VuLCBDaXNrYWRkAhMPDxYCHwEFIzI5LjA1LjIwMjYgMTg6MDAgLSAyOS4wNS4yMDI2IDIxOjAwZGQCGQ8PFgIfAQUBNGRkAh0PDxYCHwEFCDYgLSA2IFROZGQCIQ8PFgIfAQUa4oKsIDIwLjAwIChlcm0uIOKCrCAyMC4wMClkZAIjDw8WAh8BBThWSFMgRXRhZ2VuLCAxMDU1MSBCZXJsaW4sIFR1cm1zdHIuIDc1LCBSYXVtIDIxOCAoS8O8Y2hlKWRkAgsPZBYKAgEPDxYCHwEFNUNvb2tpbmcgZm9yIFBlYWNlIEtvY2hhYmVuZDogQWx0ICYgTmV1LUJlcmxpbmVyKmlubmVuZGQCAw8PFgIfAWVkZAIFDw8WAh8BBaEHQW4gZGllc2VuIEFiZW5kZW4gd2VyZGVuIHNlY2hzIEdlZmzDvGNodGV0ZSBvZGVyIGFuZGVyZSBOZXUtQmVybGluZXIqaW5uZW4gbWl0IHNlY2hzIEFsdC1CZXJsaW5lcm4qaW5uZW4genVzYW1tZW4ga29jaGVuLiBHZXJpY2h0ZSBhdXMgZGVyIEhlaW1hdCBkZXIgTmV1LUJlcmxpbmVyKmlubmVuIHdlcmRlbiBhdWYgZGVtIFNwZWlzZXBsYW4gc3RlaGVuLiBOZXUtQmVybGluZXIqaW5uZW4gc2luZCBkaWVqZW5pZ2VuLCBkaWUgZWluIGV4b3Rpc2NoZXMgUmV6ZXB0IGVpbmJyaW5nZW4uDQpBbiBkaWVzZW0gS29jaGFiZW5kIHNpbmQgc2llIEdhc3RnZWJlcippbm5lbiBzdGF0dCBHw6RzdGUuIA0KQ2lza2EgSmFuc2VuLCBHcsO8bmRlcmluIGRlciBLb2NoYWt0aW9uc2dydXBwZSBDb29raW5nIGZvciBQZWFjZSB3aXJkIGRpZSBSZWdpZSDDvGJlcm5laG1lbiB1bmQgd2lyIGvDtm5uZW4gZ2V3aXNzIHNlaW46IEVzIHdpcmQgaGVycmxpY2ggZHVmdGVuLCBzY2htZWNrZW4gdW5kIGludGVyZXNzYW50ZSBHZXNwcsOkY2hlIGdlYmVuLiBXZW5uIFNpZSBkYWJlaSBzZWluIHdvbGxlbiwgbWVsZGVuIFNpZSBzaWNoIGFuLCBlcyBlbnRzdGVoZW4gZsO8ciBTaWUgbnVyIEtvc3RlbiBmw7xyIGRhcyBFc3Nlbi4NCg0KQ2lza2EgSmFuc2VuIGlzdCBOaWVkZXJsw6RuZGVyaW4gbWl0IGluZG9uZXNpc2NoZW4gV3VyemVsbi4gU2llIGJpZXRldCBuaWNodCBudXIgaW5kb25lc2lzY2hlIEtvY2hrdXJzZSwgQ2F0ZXJpbmdzIHVuZCBEaW5uZXJzIGFuLiBBbHMgS29jaGFrdGl2aXN0aW4gYmVrb21tdCBJaHJlIExlaWRlbnNjaGFmdCBlcnN0IEZsw7xnZWwsIHdlbm4gc2llIGluIHVuc2VyZXIgdHVyYnVsZW50ZW4gV2VsdCBLb2NoZW4gdW5kIEVzc2VuIG1pdCBIZXJ6LCBNaXRnZWbDvGhsIHVuZCBTb2xpZGFyaXTDpHQga29tYmluaWVyZW4ga2Fubi5kZAIHDw8WAh8BBdkCRXMgZ2lidCBrZWluZSBLdXJzZ2Viw7xoci4gRsO8ciB2ZXJ3ZW5kZXRlIFp1dGF0ZW4gc2luZCAyMCDigqwgaW0gS3Vyc2VudGdlbHQgZW50aGFsdGVuLiBKZWRlciBUZWlsbmVobWVuZGUgemFobHQgamUgMTAg4oKsIGbDvHIgc2VpbiBFc3NlbiB1bmQgZGFzIGVpbmVzIEdlZmzDvGNodGV0ZW4vIE5ldS1CZXJsaW5lcnMuIEJlaSBlaW5lciBrdXJ6ZnJpc3RpZ2VuIFN0b3JuaWVydW5nIGFiIGRlbSAzLiBUYWcgdm9yIEt1cnNiZWdpbm4gd2lyZCBkaWVzZXIgbmljaHQgZXJzdGF0dGV0Lg0KQml0dGUgQnJldHRjaGVuLCBNZXNzZXIsIFNjaMO8cnplIHVuZCBHZXNjaGlycnR1Y2ggbWl0YnJpbmdlbi4NCg0KZGQCCw8PFgIfAQUKTWkxMDktMTAwRmRkAgwPDxYCHwEFBjc2ODIyNWRkAg0PDxYCHwEFBiZuYnNwO2RkAgUPZBYcZg9kFgYCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgUPDxYCHwBoZGQCAQ9kFgQCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgIPDxYCHwEFBU1pdHRlZGQCAw8PFgIfAQUMTWk1MDYtMDE4Ri1PZGQCBA9kFgJmDw8WBB8BBRlFeGlzdGVuemdyw7xuZHVuZyBrb21wYWt0Hw0FG0NvdXJzZURldGFpbC5hc3B4P2lkPTc2ODYxNmRkAgUPDxYCHwEFFTI5LjA1LjIwMjYNCjE4OjAwIFVocmRkAgYPDxYCHwEFAz4gMmRkAgcPDxYCHwEFBiZuYnNwO2RkAggPDxYCHwEFH+KCrCA2OC4wMDxiciAvPihlcm0uIOKCrCAzOS4wMClkZAIJDw8WAh8BBRMzMS4wNS4yMDI2IDE3OjAwOjAwZGQCCg9kFhYCAQ8PFgIfAQUZRXhpc3RlbnpncsO8bmR1bmcga29tcGFrdGRkAgMPDxYCHwFlZGQCBQ8PFgIfAQW2BlNpZSBoYWJlbiBMdXN0LCBldHdhcyB6dSB1bnRlcm5laG1lbj8gU2llIGhhYmVuIGJlcmVpdHMgZWluZSBndXRlIEdlc2Now6RmdHNpZGVlIHVuZCBkZW4gTXV0LCBzaWNoIGF1ZiBlaWdlbmUgQmVpbmUgenUgc3RlbGxlbj8gSW4gZGllc2VtIFdvY2hlbmVuZGt1cnMgd2VyZGVuIFJhdHNjaGzDpGdlIHVuZCBUaXBwcyB2ZXJtaXR0ZWx0IHNvd2llIGVpbmUgw5xiZXJzaWNodCDDvGJlciBhbGxlIHJlbGV2YW50ZW4gQmVyZWljaGUsIGRpZSBmw7xyIGRpZSBrw7xuZnRpZ2UgU2VsYnN0w6RuZGlna2VpdCB2b24gQmVkZXV0dW5nIHNpbmQsIGdlZ2ViZW4uDQoNCkluaGFsdDogDQotIEdlc2Now6RmdHNpZGVlLCBNYXJrdCwgV2VyYnVuZyANCi0gU3RhbmRvcnR3YWhsLCBHZXdlcmJlbWlldGUsIE1pZXR2ZXJ0cmFnIA0KLSBTdGV1ZXJuLCBBYnNjaHJlaWJ1bmcsIFZlcnNpY2hlcnVuZywgR2V3ZXJiZWFubWVsZHVuZyANCi0gS2Fsa3VsYXRpb24sIMO2ZmZlbnRsaWNoZSBGw7ZyZGVycHJvZ3JhbW1lIA0KLSBXYWhsIGRlciBSZWNodHNmb3JtIGRlcyBVbnRlcm5laG1lbnMgDQoNClhlbmlhIEJ1Y2hob2x6IGlzdCBHcsO8bmR1bmdzYmVyYXRlcmluIHVuZCBFLUNvbW1lcmNlIFNwZXppYWxpc3RpbiBtaXQgU2Nod2VycHVua3QgYXVmIE9ubGluZXNob3BzIHVuZCBFLU1haWwgTWFya2V0aW5nLiAiSWNoIGJlZ2xlaXRlIEdyw7xuZGVyKmlubmVuIGF1ZiBpaHJlbSBXZWcgaW4gZGllIFNlbGJzdHN0w6RuZGlna2VpdCB1bmQgdmVybWl0dGxlIHByYXhpc25haGUgU3RyYXRlZ2llbiBmw7xyIG5hY2hoYWx0aWdlbiBVbnRlcm5laG1lbnNlcmZvbGcuIiANCmRkAgcPDxYCHwFlZGQCCw8PFgIfAQUMTWk1MDYtMDE4Ri1PZGQCDw8PFgIfAQUPQnVjaGhvbHosIFhlbmlhZGQCEw8PFgIfAQUjMjkuMDUuMjAyNiAxODowMCAtIDMxLjA1LjIwMjYgMTc6MDBkZAIZDw8WAh8BBQIyMGRkAh0PDxYCHwEFCTYgLSAxNSBUTmRkAiEPDxYCHwEFGuKCrCA2OC4wMCAoZXJtLiDigqwgMzkuMDApZGQCIw8PFgIfAQUUSW50ZXJuZXQsICAsLCBPbmxpbmVkZAILD2QWCgIBDw8WAh8BBRlFeGlzdGVuemdyw7xuZHVuZyBrb21wYWt0ZGQCAw8PFgIfAWVkZAIFDw8WAh8BBbYGU2llIGhhYmVuIEx1c3QsIGV0d2FzIHp1IHVudGVybmVobWVuPyBTaWUgaGFiZW4gYmVyZWl0cyBlaW5lIGd1dGUgR2VzY2jDpGZ0c2lkZWUgdW5kIGRlbiBNdXQsIHNpY2ggYXVmIGVpZ2VuZSBCZWluZSB6dSBzdGVsbGVuPyBJbiBkaWVzZW0gV29jaGVuZW5ka3VycyB3ZXJkZW4gUmF0c2NobMOkZ2UgdW5kIFRpcHBzIHZlcm1pdHRlbHQgc293aWUgZWluZSDDnGJlcnNpY2h0IMO8YmVyIGFsbGUgcmVsZXZhbnRlbiBCZXJlaWNoZSwgZGllIGbDvHIgZGllIGvDvG5mdGlnZSBTZWxic3TDpG5kaWdrZWl0IHZvbiBCZWRldXR1bmcgc2luZCwgZ2VnZWJlbi4NCg0KSW5oYWx0OiANCi0gR2VzY2jDpGZ0c2lkZWUsIE1hcmt0LCBXZXJidW5nIA0KLSBTdGFuZG9ydHdhaGwsIEdld2VyYmVtaWV0ZSwgTWlldHZlcnRyYWcgDQotIFN0ZXVlcm4sIEFic2NocmVpYnVuZywgVmVyc2ljaGVydW5nLCBHZXdlcmJlYW5tZWxkdW5nIA0KLSBLYWxrdWxhdGlvbiwgw7ZmZmVudGxpY2hlIEbDtnJkZXJwcm9ncmFtbWUgDQotIFdhaGwgZGVyIFJlY2h0c2Zvcm0gZGVzIFVudGVybmVobWVucyANCg0KWGVuaWEgQnVjaGhvbHogaXN0IEdyw7xuZHVuZ3NiZXJhdGVyaW4gdW5kIEUtQ29tbWVyY2UgU3BlemlhbGlzdGluIG1pdCBTY2h3ZXJwdW5rdCBhdWYgT25saW5lc2hvcHMgdW5kIEUtTWFpbCBNYXJrZXRpbmcuICJJY2ggYmVnbGVpdGUgR3LDvG5kZXIqaW5uZW4gYXVmIGlocmVtIFdlZyBpbiBkaWUgU2VsYnN0c3TDpG5kaWdrZWl0IHVuZCB2ZXJtaXR0bGUgcHJheGlzbmFoZSBTdHJhdGVnaWVuIGbDvHIgbmFjaGhhbHRpZ2VuIFVudGVybmVobWVuc2VyZm9sZy4iIA0KZGQCBw8PFgIfAWVkZAILDw8WAh8BBQxNaTUwNi0wMThGLU9kZAIMDw8WAh8BBQY3Njg2MTZkZAINDw8WAh8BBQYmbmJzcDtkZAIGD2QWHGYPZBYGAgEPDxYCHwBnZGQCAw8PFgIfAGhkZAIFDw8WAh8AaGRkAgEPZBYEAgEPDxYCHwBnZGQCAw8PFgIfAGhkZAICDw8WAh8BBQVNaXR0ZWRkAgMPDxYCHwEFCk1pMTA5LTkwM0ZkZAIED2QWAmYPDxYEHwEFM1dhbmRlcm4gaW4gZGVyIFVja2VybWFyayAtIHZvbiBDaG9yaW4gbmFjaCBCcm9kb3dpbh8NBRtDb3Vyc2VEZXRhaWwuYXNweD9pZD03NjgyMDFkZAIFDw8WAh8BBRUzMC4wNS4yMDI2DQowOTo0NSBVaHJkZAIGDw8WAh8BBQM+IDJkZAIHDw8WAh8BBQYmbmJzcDtkZAIIDw8WAh8BBR/igqwgMzEuMjA8YnIgLz4oZXJtLiDigqwgMTkuNjApZGQCCQ8PFgIfAQUTMzAuMDUuMjAyNiAxNjowMDowMGRkAgoPZBYWAgEPDxYCHwEFM1dhbmRlcm4gaW4gZGVyIFVja2VybWFyayAtIHZvbiBDaG9yaW4gbmFjaCBCcm9kb3dpbmRkAgMPDxYCHwEFCVRhZ2VzdG91cmRkAgUPDxYCHwEFjAZVbnNlcmUgV2FuZGVydW5nIGR1cmNoIGRhcyBCaW9zcMOkcmVucmVzZXJ2YXQgU2Nob3JmaGVpZGUsIGFsc28gZWlnZW50bGljaCBkZW0gUmFuZGJlcmVpY2ggZGVyIFVja2VybWFyayB1bmQgc2Nob24gQmFybmltLCBiZWdpbm5lbiB3aXIgYW0gQmFobmhvZiBDaG9yaW4uIFZvcmJlaSBhbiBkZXIgS2xvc3RlcnJ1aW5lIGdlaHQgZXMgUmljaHR1bmcgQW10c2VlLiBNYWxlcmlzY2hlIFdpZXNlbndlZ2UsIGdlc8OkdW10IHZvbiBCw7xzY2hlbiB1bmQgQsOkdW1lbiBmw7xocmVuIHRlaWx3ZWlzZSBhbiBGZXVjaHRnZWJpZXRlbiB2b3JiZWksIGRpZSBhbiBTYWdlbiBkZXIgS2luZGhlaXQgZXJpbm5lcm4uIE5hY2ggZWluZW0gQWJzdGVjaGVyIGlucyDDlmtvZG9yZiBCcm9kb3dpbiBnZWh0IGVzIGF1ZiBkZW4gUsO8Y2t3ZWcgdW5zZXJlciAxNSBrbSBsYW5nZW4gV2FuZGVydW5nIHZvcmJlaSBhbSBXZWnDn2VuIFNlZSBiaXMgenVtIEJhaG5ob2YgQ2hvcmluLiANCg0KQ2hyaXN0aW5lIEJhcnRlbHMgd2FyIGJpcyAyMDIxIGFuIGRlciBWSFMgQmVybGluIE1pdHRlIHVudGVyIGFuZGVyZW0gZsO8ciBkZW4gUHJvZ3JhbW1iZXJlaWNoIFVtd2VsdCB2ZXJhbnR3b3J0bGljaC4gU2VpdCBlaW5pZ2VyIFplaXQgbGVidCBzaWUgw7xiZXJ3aWVnZW5kIGluIGRlciBVY2tlcm1hcmsuIElociBNb3R0bzogIkRpZSBOYXR1ciBow6RsdCBmw7xyIHVucyBhbGxlIHd1bmRlcmJhcmUgTW9tZW50ZSBiZXJlaXQsIG1hbiBtdXNzIG51ciBkaWUgQXVnZW4gdW5kIEhlcnplbiDDtmZmbmVuISJkZAIHDw8WAh8BBZsCU2Ftc3RhZywgMzAuMDUuMjAyNg0KDQpUcmVmZnB1bmt0OiA5LjIwIFVociwgQmFobmhvZnN2b3JwbGF0eiBDaG9yaW4gDQoNClRpcHA6IFJlaXNlbiBTaWUgbWl0IGRlciBCYWhuIGFuLCB6dW0gUGxhbnVuZ3N6ZWl0cHVua3Qgei5CLiBtaXQgZGVtIFJFMyBhYiBHZXN1bmRicnVubmVuIDguMzkgVWhyIA0KDQpCaXR0ZSB3ZXR0ZXJnZXJlY2h0ZSBLbGVpZHVuZywgYXVzcmVpY2hlbmQgVHJpbmt3YXNzZXIgdW5kIGV0d2FzIGbDvHIgZWluIGdlbWVpbnNhbWVzIFBpY2tuaWNrIG1pdGJyaW5nZW4uIGRkAgsPDxYCHwEFCk1pMTA5LTkwM0ZkZAIPDw8WAh8BBRJCYXJ0ZWxzLCBDaHJpc3RpbmVkZAITDw8WAh8BBSMzMC4wNS4yMDI2IDA5OjQ1IC0gMzAuMDUuMjAyNiAxNjowMGRkAhkPDxYCHwEFAThkZAIdDw8WAh8BBQk2IC0gMTUgVE5kZAIhDw8WAh8BBRrigqwgMzEuMjAgKGVybS4g4oKsIDE5LjYwKWRkAiMPDxYCHwEFEyBCZXJsaW4sLCBFeGt1cnNpb25kZAILD2QWCgIBDw8WAh8BBTNXYW5kZXJuIGluIGRlciBVY2tlcm1hcmsgLSB2b24gQ2hvcmluIG5hY2ggQnJvZG93aW5kZAIDDw8WAh8BBQlUYWdlc3RvdXJkZAIFDw8WAh8BBYwGVW5zZXJlIFdhbmRlcnVuZyBkdXJjaCBkYXMgQmlvc3DDpHJlbnJlc2VydmF0IFNjaG9yZmhlaWRlLCBhbHNvIGVpZ2VudGxpY2ggZGVtIFJhbmRiZXJlaWNoIGRlciBVY2tlcm1hcmsgdW5kIHNjaG9uIEJhcm5pbSwgYmVnaW5uZW4gd2lyIGFtIEJhaG5ob2YgQ2hvcmluLiBWb3JiZWkgYW4gZGVyIEtsb3N0ZXJydWluZSBnZWh0IGVzIFJpY2h0dW5nIEFtdHNlZS4gTWFsZXJpc2NoZSBXaWVzZW53ZWdlLCBnZXPDpHVtdCB2b24gQsO8c2NoZW4gdW5kIELDpHVtZW4gZsO8aHJlbiB0ZWlsd2Vpc2UgYW4gRmV1Y2h0Z2ViaWV0ZW4gdm9yYmVpLCBkaWUgYW4gU2FnZW4gZGVyIEtpbmRoZWl0IGVyaW5uZXJuLiBOYWNoIGVpbmVtIEFic3RlY2hlciBpbnMgw5Zrb2RvcmYgQnJvZG93aW4gZ2VodCBlcyBhdWYgZGVuIFLDvGNrd2VnIHVuc2VyZXIgMTUga20gbGFuZ2VuIFdhbmRlcnVuZyB2b3JiZWkgYW0gV2Vpw59lbiBTZWUgYmlzIHp1bSBCYWhuaG9mIENob3Jpbi4gDQoNCkNocmlzdGluZSBCYXJ0ZWxzIHdhciBiaXMgMjAyMSBhbiBkZXIgVkhTIEJlcmxpbiBNaXR0ZSB1bnRlciBhbmRlcmVtIGbDvHIgZGVuIFByb2dyYW1tYmVyZWljaCBVbXdlbHQgdmVyYW50d29ydGxpY2guIFNlaXQgZWluaWdlciBaZWl0IGxlYnQgc2llIMO8YmVyd2llZ2VuZCBpbiBkZXIgVWNrZXJtYXJrLiBJaHIgTW90dG86ICJEaWUgTmF0dXIgaMOkbHQgZsO8ciB1bnMgYWxsZSB3dW5kZXJiYXJlIE1vbWVudGUgYmVyZWl0LCBtYW4gbXVzcyBudXIgZGllIEF1Z2VuIHVuZCBIZXJ6ZW4gw7ZmZm5lbiEiZGQCBw8PFgIfAQWbAlNhbXN0YWcsIDMwLjA1LjIwMjYNCg0KVHJlZmZwdW5rdDogOS4yMCBVaHIsIEJhaG5ob2Zzdm9ycGxhdHogQ2hvcmluIA0KDQpUaXBwOiBSZWlzZW4gU2llIG1pdCBkZXIgQmFobiBhbiwgenVtIFBsYW51bmdzemVpdHB1bmt0IHouQi4gbWl0IGRlbSBSRTMgYWIgR2VzdW5kYnJ1bm5lbiA4LjM5IFVociANCg0KQml0dGUgd2V0dGVyZ2VyZWNodGUgS2xlaWR1bmcsIGF1c3JlaWNoZW5kIFRyaW5rd2Fzc2VyIHVuZCBldHdhcyBmw7xyIGVpbiBnZW1laW5zYW1lcyBQaWNrbmljayBtaXRicmluZ2VuLiBkZAILDw8WAh8BBQpNaTEwOS05MDNGZGQCDA8PFgIfAQUGNzY4MjAxZGQCDQ8PFgIfAQUGJm5ic3A7ZGQCBw9kFhxmD2QWBgIBDw8WAh8AZ2RkAgMPDxYCHwBoZGQCBQ8PFgIfAGhkZAIBD2QWBAIBDw8WAh8AZ2RkAgMPDxYCHwBoZGQCAg8PFgIfAQUFTWl0dGVkZAIDDw8WAh8BBQpNaTIwMS0wNDRTZGQCBA9kFgJmDw8WBB8BBRdPZmZlbmUgU2NocmVpYndlcmtzdGF0dB8NBRtDb3Vyc2VEZXRhaWwuYXNweD9pZD03NTM2NzJkZAIFDw8WAh8BBRUzMC4wNS4yMDI2DQoxMDowMCBVaHJkZAIGDw8WAh8BBQM+IDJkZAIHDw8WAh8BBQYmbmJzcDtkZAIIDw8WAh8BBR/igqwgMTcuMDA8YnIgLz4oZXJtLiDigqwgMTcuMDApZGQCCQ8PFgIfAQUTMzAuMDUuMjAyNiAxMzozMDowMGRkAgoPZBYWAgEPDxYCHwEFF09mZmVuZSBTY2hyZWlid2Vya3N0YXR0ZGQCAw8PFgIfAWVkZAIFDw8WAh8BBe0KU2llIG3DtmNodGVuIGVpZ2VuZSBUZXh0ZSB2ZXJmYXNzZW4sIHNjaGFmZmVuIGVzIGFiZXIgbmljaHQgenUgSGF1c2UgYW0gZWlnZW5lbiBTY2hyZWlidGlzY2g/IEluIGRlciBvZmZlbmVuIFNjaHJlaWJ3ZXJrc3RhdHQgYmVrb21tZW4gU2llIEFucmVndW5nZW4genVtIFNjaHJlaWJlbiwgZXJoYWx0ZW4gRmVlZGJhY2sgenUgZWlnZW5lbiBUZXh0ZW4gdW5kIHRyZWZmZW4gR2xlaWNoZ2VzaW5udGUgenVtIEF1c3RhdXNjaC4gU2llIGdlaGVuIG1pdCBtZWhyZXJlbiBTZWl0ZW4gU2VsYnN0Z2VzY2hyaWViZW5lbSwgVGlwcHMgZsO8ciBkaWUgV2VpdGVyZW50d2lja2x1bmcgSWhyZXIgR2VzY2hpY2h0ZSB1bmQgbmV1ZXIgTW90aXZhdGlvbiBuYWNoIEhhdXNlLiBEaWUgb2ZmZW5lIFNjaHJlaWJ3ZXJrc3RhdHQgYmVzdGVodCBhdXMgendlaSBNb2R1bGVuLCBkaWUgdW5hYmjDpG5naWcgdm9uZWluYW5kZXIgYmVzdWNodCB3ZXJkZW4ga8O2bm5lbi4gDQoNCk1vZHVsIDE6IDEwLjAwIGJpcyAxMS4zMCBVaHINCkdlbWVpbnNhbWVzIFNjaHJlaWJlbjogU2llIGVyaGFsdGVuIHp3ZWkgYmlzIGRyZWkgU2NocmVpYmF1ZmdhYmVuIG9kZXIgU2NocmVpYsO8YnVuZ2VuLCBhbiBkZW5lbiBTaWUgamUgendhbnppZyBiaXMgZHJlacOfaWcgTWludXRlbiBhcmJlaXRlbi4gV2FzIHVuZCB3b3LDvGJlciBTaWUgc2NocmVpYmVuIGlzdCB2b2xsa29tbWVuIG9mZmVuLiBEaWUgVm9yZ2FiZW4gZGllbmVuIGxlZGlnbGljaCB6dXIgQW5yZWd1bmcuIA0KDQpNb2R1bCAyOiAxMi4wMCBiaXMgMTMuMzAgVWhyDQpUZXh0a3JpdGlrOiBUZWlsbmVobWVuZGUga8O2bm5lbiBtaXRnZWJyYWNodGUsIMO8YmVyYXJiZWl0ZXRlIFRleHRlIHZvcnN0ZWxsZW4gdW5kIGVyaGFsdGVuIGRhenUga29uc3RydWt0aXZlIFLDvGNrbWVsZHVuZyBtaXQgVm9yc2NobMOkZ2VuIHp1ciBXZWl0ZXJiZWFyYmVpdHVuZy4gRXMga2FubiBudXIgZWluZSBiZWdyZW56dGUgQW56YWhsIHZvbiBUZXh0ZW4gYmVzcHJvY2hlbiB3ZXJkZW4uIERhaGVyIG11c3Mgdm9yYWIgcGVyIEVtYWlsIChiZXR0aW5hX29mZmljZTJAZnJlZW5ldC5kZSkgZWluZSBBbm1lbGR1bmcgdW5kIEFic3ByYWNoZSB6dXIgVGV4dGzDpG5nZSBtaXQgZGVyIERvemVudGluIHN0YXR0ZmluZGVuLg0KDQpCZXR0aW5hIEhhbXBsIHZlcsO2ZmZlbnRsaWNodGUgS3Vyemdlc2NoaWNodGVuLCBzY2hyaWViIEtpbmRlcmtyaW1pcyBmw7xycyBSYWRpbyB1bmQgS3VyemZpbG1lIGbDvHJzIEZlcm5zZWhlbi4gU2llIGlzdCBhdXNnZWJpbGRldGUgRmlsbWF1dG9yaW4gKFpERikgdW5kIGJlZ2xlaXRldCBzZWl0IHZpZWxlbiBKYWhyZW4gTWVuc2NoZW4gYmVpIGlocmVtIFNjaHJlaWJwcm96ZXNzLiBiZXR0aW5haGFtcGwuZGUNCg0KZGQCBw8PFgIfAWVkZAILDw8WAh8BBQpNaTIwMS0wNDRTZGQCDw8PFgIfAQUOSGFtcGwsIEJldHRpbmFkZAITDw8WAh8BBSMzMC4wNS4yMDI2IDEwOjAwIC0gMzAuMDUuMjAyNiAxMzozMGRkAhkPDxYCHwEFATRkZAIdDw8WAh8BBQkxIC0gMTAgVE5kZAIhDw8WAh8BBRrigqwgMTcuMDAgKGVybS4g4oKsIDE3LjAwKWRkAiMPDxYCHwEFRlZIUyBCZXJsaW4gTWl0dGUsIDEwMTE1IEJlcmxpbiwgTGluaWVuc3RyLiAxNjIsIFJhdW0gMi4xMSAoRm90b2dyYWZpZSlkZAILD2QWCgIBDw8WAh8BBRdPZmZlbmUgU2NocmVpYndlcmtzdGF0dGRkAgMPDxYCHwFlZGQCBQ8PFgIfAQXtClNpZSBtw7ZjaHRlbiBlaWdlbmUgVGV4dGUgdmVyZmFzc2VuLCBzY2hhZmZlbiBlcyBhYmVyIG5pY2h0IHp1IEhhdXNlIGFtIGVpZ2VuZW4gU2NocmVpYnRpc2NoPyBJbiBkZXIgb2ZmZW5lbiBTY2hyZWlid2Vya3N0YXR0IGJla29tbWVuIFNpZSBBbnJlZ3VuZ2VuIHp1bSBTY2hyZWliZW4sIGVyaGFsdGVuIEZlZWRiYWNrIHp1IGVpZ2VuZW4gVGV4dGVuIHVuZCB0cmVmZmVuIEdsZWljaGdlc2lubnRlIHp1bSBBdXN0YXVzY2guIFNpZSBnZWhlbiBtaXQgbWVocmVyZW4gU2VpdGVuIFNlbGJzdGdlc2NocmllYmVuZW0sIFRpcHBzIGbDvHIgZGllIFdlaXRlcmVudHdpY2tsdW5nIElocmVyIEdlc2NoaWNodGUgdW5kIG5ldWVyIE1vdGl2YXRpb24gbmFjaCBIYXVzZS4gRGllIG9mZmVuZSBTY2hyZWlid2Vya3N0YXR0IGJlc3RlaHQgYXVzIHp3ZWkgTW9kdWxlbiwgZGllIHVuYWJow6RuZ2lnIHZvbmVpbmFuZGVyIGJlc3VjaHQgd2VyZGVuIGvDtm5uZW4uIA0KDQpNb2R1bCAxOiAxMC4wMCBiaXMgMTEuMzAgVWhyDQpHZW1laW5zYW1lcyBTY2hyZWliZW46IFNpZSBlcmhhbHRlbiB6d2VpIGJpcyBkcmVpIFNjaHJlaWJhdWZnYWJlbiBvZGVyIFNjaHJlaWLDvGJ1bmdlbiwgYW4gZGVuZW4gU2llIGplIHp3YW56aWcgYmlzIGRyZWnDn2lnIE1pbnV0ZW4gYXJiZWl0ZW4uIFdhcyB1bmQgd29yw7xiZXIgU2llIHNjaHJlaWJlbiBpc3Qgdm9sbGtvbW1lbiBvZmZlbi4gRGllIFZvcmdhYmVuIGRpZW5lbiBsZWRpZ2xpY2ggenVyIEFucmVndW5nLiANCg0KTW9kdWwgMjogMTIuMDAgYmlzIDEzLjMwIFVocg0KVGV4dGtyaXRpazogVGVpbG5laG1lbmRlIGvDtm5uZW4gbWl0Z2VicmFjaHRlLCDDvGJlcmFyYmVpdGV0ZSBUZXh0ZSB2b3JzdGVsbGVuIHVuZCBlcmhhbHRlbiBkYXp1IGtvbnN0cnVrdGl2ZSBSw7xja21lbGR1bmcgbWl0IFZvcnNjaGzDpGdlbiB6dXIgV2VpdGVyYmVhcmJlaXR1bmcuIEVzIGthbm4gbnVyIGVpbmUgYmVncmVuenRlIEFuemFobCB2b24gVGV4dGVuIGJlc3Byb2NoZW4gd2VyZGVuLiBEYWhlciBtdXNzIHZvcmFiIHBlciBFbWFpbCAoYmV0dGluYV9vZmZpY2UyQGZyZWVuZXQuZGUpIGVpbmUgQW5tZWxkdW5nIHVuZCBBYnNwcmFjaGUgenVyIFRleHRsw6RuZ2UgbWl0IGRlciBEb3plbnRpbiBzdGF0dGZpbmRlbi4NCg0KQmV0dGluYSBIYW1wbCB2ZXLDtmZmZW50bGljaHRlIEt1cnpnZXNjaGljaHRlbiwgc2NocmllYiBLaW5kZXJrcmltaXMgZsO8cnMgUmFkaW8gdW5kIEt1cnpmaWxtZSBmw7xycyBGZXJuc2VoZW4uIFNpZSBpc3QgYXVzZ2ViaWxkZXRlIEZpbG1hdXRvcmluIChaREYpIHVuZCBiZWdsZWl0ZXQgc2VpdCB2aWVsZW4gSmFocmVuIE1lbnNjaGVuIGJlaSBpaHJlbSBTY2hyZWlicHJvemVzcy4gYmV0dGluYWhhbXBsLmRlDQoNCmRkAgcPDxYCHwFlZGQCCw8PFgIfAQUKTWkyMDEtMDQ0U2RkAgwPDxYCHwEFBjc1MzY3MmRkAg0PDxYCHwEFBiZuYnNwO2RkAggPZBYcZg9kFgYCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgUPDxYCHwBoZGQCAQ9kFgQCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgIPDxYCHwEFBU1pdHRlZGQCAw8PFgIfAQUKTWkzMDEtMTkwU2RkAgQPZBYCZg8PFgQfAQUWRnXDn3JlZmxleHpvbmVubWFzc2FnZR8NBRtDb3Vyc2VEZXRhaWwuYXNweD9pZD03NTQ1OTdkZAIFDw8WAh8BBRUzMC4wNS4yMDI2DQoxMDowMCBVaHJkZAIGDw8WAh8BBQZiZWxlZ3RkZAIHDw8WAh8BBR9BdWZuYWhtZSBpbiBXYXJ0ZWxpc3RlIG3DtmdsaWNoZGQCCA8PFgIfAQUf4oKsIDMzLjYwPGJyIC8+KGVybS4g4oKsIDIxLjYwKWRkAgkPDxYCHwEFEzMwLjA1LjIwMjYgMTc6MDA6MDBkZAIKD2QWFgIBDw8WAh8BBRZGdcOfcmVmbGV4em9uZW5tYXNzYWdlZGQCAw8PFgIfAQUNV29jaGVuZW5ka3Vyc2RkAgUPDxYCHwEFywVJbiBkaWVzZW0gV29ya3Nob3AgZ2VodCBlcyB1bSB1bnNlcmUgRsO8w59lLiBXYXMgdHVuIGdlZ2VuIGthbHRlIEbDvMOfZT8gV2llIGJsZWliZW4gc2llIGJpcyBpbnMgaG9oZSBBbHRlciBiZXdlZ2xpY2g/IEltIE1pdHRlbHB1bmt0IHN0ZWh0IGVpbmUgRWluZsO8aHJ1bmcgaW4gZGllIEZ1w59yZWZsZXh6b25lbm1hc3NhZ2UsIGFscyByZWxhdGl2IGVpbmZhY2ggenUgZXJsZXJuZW5kZSBNZXRob2RlLCBkaWUgU2VsYnN0aGVpbHVuZ3NrcsOkZnRlIGRlcyBLw7ZycGVycyBhbnp1cmVnZW4uIERpZSBNYXNzYWdlIHdpcmt0IGVudHNwYW5uZW5kIHVuZCBoYXJtb25pc2llcmVuZCBhdWYgdW5zZXJlbiBLw7ZycGVyIHVuZCBkaWVudCwgdm9uIExhaWVuIGF1c2dlZsO8aHJ0LCB2b3IgYWxsZW0gZGVyIEdlc3VuZGhlaXRzdm9yc29yZ2UuIEF1w59lciBlaW5lciBsb2thbGVuIHVuZCBpbnRlbnNpdmVyZW4gRHVyY2hibHV0dW5nIGRlciBGw7zDn2Uga2FubiBzaWUgZWluZSBWZXJiZXNzZXJ1bmcgZ2VzdMO2cnRlciBHZXdlYmUgLSB1bmQgT3JnYW5mdW5rdGlvbmVuIGJld2lya2VuLg0KDQpTeWx2aWEgWmVsbGVyIGlzdCBZb2dhbGVocmVyaW4gdW5kIGF1c2dlYmlsZGV0ZSBNYXNzZXVyaW4uIFNpZSB1bnRlcnJpY2h0ZXQgc2VpdCB2aWVsZW4gSmFocmVuIE1hc3NhZ2V3b3Jrc2hvcHMgbWl0IHVudGVyc2NoaWVkbGljaGVuIE1hc3NhZ2V0ZWNobmlrZW4uIA0KZGQCBw8PFgIfAQXFAUJpdHRlIGJyaW5nZW4gU2llIHdhcm1lIGxvY2tlcmUgS2xlaWR1bmcsIHdhcm1lIFNvY2tlbiwgZWluZSBEZWNrZSwgZWluIEtpc3NlbiwgQnVudHN0aWZ0ZSB1bmQgUGFwaWVyIGbDvHIgTm90aXplbiBtaXQuDQpZb3VyIGNvdXJzZSBpbnN0cnVjdG9yIGNhbiBhbnN3ZXIgeW91ciBxdWVzdGlvbnMgaW4gRW5nbGlzaCB3aGVuIHJlcXVpcmVkLg0KZGQCCw8PFgIfAQUKTWkzMDEtMTkwU2RkAg8PDxYCHwEFDlplbGxlciwgU3lsdmlhZGQCEw8PFgIfAQUjMzAuMDUuMjAyNiAxMDowMCAtIDMwLjA1LjIwMjYgMTc6MDBkZAIZDw8WAh8BBQE4ZGQCHQ8PFgIfAQUJNiAtIDEyIFROZGQCIQ8PFgIfAQUa4oKsIDMzLjYwIChlcm0uIOKCrCAyMS42MClkZAIjDw8WAh8BBUVWSFMgQmVybGluIE1pdHRlLCAxMDExNSBCZXJsaW4sIExpbmllbnN0ci4gMTYyLCBSYXVtIDQuMDkgKEd5bW5hc3RpaylkZAILD2QWCgIBDw8WAh8BBRZGdcOfcmVmbGV4em9uZW5tYXNzYWdlZGQCAw8PFgIfAQUNV29jaGVuZW5ka3Vyc2RkAgUPDxYCHwEFywVJbiBkaWVzZW0gV29ya3Nob3AgZ2VodCBlcyB1bSB1bnNlcmUgRsO8w59lLiBXYXMgdHVuIGdlZ2VuIGthbHRlIEbDvMOfZT8gV2llIGJsZWliZW4gc2llIGJpcyBpbnMgaG9oZSBBbHRlciBiZXdlZ2xpY2g/IEltIE1pdHRlbHB1bmt0IHN0ZWh0IGVpbmUgRWluZsO8aHJ1bmcgaW4gZGllIEZ1w59yZWZsZXh6b25lbm1hc3NhZ2UsIGFscyByZWxhdGl2IGVpbmZhY2ggenUgZXJsZXJuZW5kZSBNZXRob2RlLCBkaWUgU2VsYnN0aGVpbHVuZ3NrcsOkZnRlIGRlcyBLw7ZycGVycyBhbnp1cmVnZW4uIERpZSBNYXNzYWdlIHdpcmt0IGVudHNwYW5uZW5kIHVuZCBoYXJtb25pc2llcmVuZCBhdWYgdW5zZXJlbiBLw7ZycGVyIHVuZCBkaWVudCwgdm9uIExhaWVuIGF1c2dlZsO8aHJ0LCB2b3IgYWxsZW0gZGVyIEdlc3VuZGhlaXRzdm9yc29yZ2UuIEF1w59lciBlaW5lciBsb2thbGVuIHVuZCBpbnRlbnNpdmVyZW4gRHVyY2hibHV0dW5nIGRlciBGw7zDn2Uga2FubiBzaWUgZWluZSBWZXJiZXNzZXJ1bmcgZ2VzdMO2cnRlciBHZXdlYmUgLSB1bmQgT3JnYW5mdW5rdGlvbmVuIGJld2lya2VuLg0KDQpTeWx2aWEgWmVsbGVyIGlzdCBZb2dhbGVocmVyaW4gdW5kIGF1c2dlYmlsZGV0ZSBNYXNzZXVyaW4uIFNpZSB1bnRlcnJpY2h0ZXQgc2VpdCB2aWVsZW4gSmFocmVuIE1hc3NhZ2V3b3Jrc2hvcHMgbWl0IHVudGVyc2NoaWVkbGljaGVuIE1hc3NhZ2V0ZWNobmlrZW4uIA0KZGQCBw8PFgIfAQXFAUJpdHRlIGJyaW5nZW4gU2llIHdhcm1lIGxvY2tlcmUgS2xlaWR1bmcsIHdhcm1lIFNvY2tlbiwgZWluZSBEZWNrZSwgZWluIEtpc3NlbiwgQnVudHN0aWZ0ZSB1bmQgUGFwaWVyIGbDvHIgTm90aXplbiBtaXQuDQpZb3VyIGNvdXJzZSBpbnN0cnVjdG9yIGNhbiBhbnN3ZXIgeW91ciBxdWVzdGlvbnMgaW4gRW5nbGlzaCB3aGVuIHJlcXVpcmVkLg0KZGQCCw8PFgIfAQUKTWkzMDEtMTkwU2RkAgwPDxYCHwEFBjc1NDU5N2RkAg0PDxYCHwEFBiZuYnNwO2RkAgkPZBYcZg9kFgYCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgUPDxYCHwBoZGQCAQ9kFgQCAQ8PFgIfAGdkZAIDDw8WAh8AaGRkAgIPDxYCHwEFBU1pdHRlZGQCAw8PFgIfAQUKTWkyMDUtMTUzU2RkAgQPZBYCZg8PFgQfAQUIVMO8cmtpcyEfDQUbQ291cnNlRGV0YWlsLmFzcHg/aWQ9NzU1OTkyZGQCBQ8PFgIfAQUVMzAuMDUuMjAyNg0KMTA6MDAgVWhyZGQCBg8PFgIfAQUGYmVsZWd0ZGQCBw8PFgIfAQUfQXVmbmFobWUgaW4gV2FydGVsaXN0ZSBtw7ZnbGljaGRkAggPDxYCHwEFH+KCrCA2Mi45MDxiciAvPihlcm0uIOKCrCAzNi4zNSlkZAIJDw8WAh8BBRMzMS4wNS4yMDI2IDE3OjMwOjAwZGQCCg9kFhYCAQ8PFgIfAQUIVMO8cmtpcyFkZAIDDw8WAh8BBQxBY3J5bG1hbGVyZWlkZAIFDw8WAh8BBagJSW0gTWl0dGVscHVua3QgZGllc2VzIFdvcmtzaG9wcyBzdGVodCBkaWUgc3lzdGVtYXRpc2NoZSBBdXNlaW5hbmRlcnNldHp1bmcgbWl0IFTDvHJraXMsIGVpbmVyIEZhcmJlIGRlciBudXIgc2VsdGVuIGluIEZhcmJhbmFseXNlbiBkaWUgaWhyIGdlYsO8aHJlbmRlIEF1Zm1lcmtzYW1rZWl0IHp1IFRlaWwgd2lyZC4gRXMgdmVyZWludCBkaWUgS8O8aGxlIGRlcyBCbGF1cyB1bmQgZGllIE5hdMO8cmxpY2hrZWl0IGRlcyBHcsO8bnMgaW4gc2ljaC4gQXVzZ2VoZW5kIHZvbiBlaW5lciBBbmFseXNlIGRlcyBVbWdhbmdzIG1pdCBUw7xya2lzIGluIGRlciBrbGFzc2lzY2hlbiBNb2Rlcm5lIHVudGVyc3VjaGVuIHdpciBkaWUgdW50ZXJzY2hpZWRsaWNoc3RlbiBNw7ZnbGljaGtlaXRlbiBkZXMgVW1nYW5ncyBtaXQgZGVyIEZhcmJlIFTDvHJraXMgaW4gZGVyIE1hbGVyZWksIHZvbiBlaW5lbSBzcG9udGFuZW4gdW5kIGluc3Rpbmt0aXZlbiBIZXJhbmdlaGVuIGJpcyBoaW4genUga29uemVwdGlvbmVsbGVuIElkZWVuLCB2b24gZmlnw7xybGljaGVuIEJpbGR0aGVtZW4gYmlzIGhpbiB6dSBhYnN0cmFrdGVuIEtvbXBvc2l0aW9uZW4uIERhcyBadXNhbW1lbnNwaWVsIHZvbiBUw7xya2lzIG1pdCBhbmRlcmVuIEZhcmJlbiBzcGllbHQgZGFiZWkgZWluZSBncm/Dn2UgUm9sbGUgZWJlbnNvIHdpZSBkaWUgaGFuZHdlcmtsaWNoLXRlY2huaXNjaGVuIEFzcGVrdGUgZGVyIFVtc2V0enVuZyBkZXIgTWFsZXJlaS4gRGVyIEt1cnMgaXN0IHNvd29obCBmw7xyIEFuZsOkbmdlcippbm5lbiBhbHMgYXVjaCBmw7xyIEZvcnRnZXNjaHJpdHRlbmUgZ2VlaWduZXQuDQoNCkFuZHJlYXMgS3JhbWVyIHN0dWRpZXJ0ZSBHcmFmaWsgdW5kIE1hbGVyZWkgYW4gZGVyIEt1bnN0aG9jaHNjaHVsZSBCdXJnIEdpZWJpY2hlbnN0ZWluIEhhbGxlIHVuZCBNYWxlcmVpIGFuIGRlciBBY2NhZGVtaWEgZGkgQmVsbGUgQXJ0aSBpbiBWZW5lZGlnLiBTZWl0IDE5OTMgRG96ZW50dXJlbiBpbiBJdGFsaWVuIHVuZCBEZXV0c2NobGFuZCB1LmEuIGFscyBMZWhyYmVhdWZ0cmFndGVyIGFuIGRlciBVbml2ZXJzaXTDpHQgT3NuYWJyw7xjay4gd3d3LmFuZHJlYXMta3JhbWVyLmV1IA0KDQpZb3VyIGNvdXJzZSBpbnN0cnVjdG9yIGNhbiBhbnN3ZXIgeW91ciBxdWVzdGlvbnMgaW4gSXRhbGlhbiBhbmQgRW5nbGlzaCB3aGVuIHJlcXVpcmVkLmRkAgcPDxYCHwEF8wFCaXR0ZSBtaXRicmluZ2VuOiBBY3J5bGZhcmJlbiAoSW5kaXNjaGdlbGIsIEthZG1pdW1nZWxiLCBaaW5ubm9iZXJyb3QsIE1hZ2VudGEsIEthcm1pbnJvdCwgQ3lhbmJsYXUsIFVsdHJhbWFyaW5ibGF1LCBUaXRhbndlacOfLCBTY2h3YXJ6LCBPY2tlciBzb3dpZSBGYXJiZW4gbmFjaCBlaWdlbmVyIFdhaGwpLCBGbGFjaHBpbnNlbCwgU3BhY2h0ZWxuLCBBY3J5bG1hbGJsb2NrLCBMZWlud8OkbmRlIG9kZXIgTWFscGFwcGVuLiBkZAILDw8WAh8BBQpNaTIwNS0xNTNTZGQCDw8PFgIfAQUPS3JhbWVyLCBBbmRyZWFzZGQCEw8PFgIfAQUjMzAuMDUuMjAyNiAxMDowMCAtIDMxLjA1LjIwMjYgMTc6MzBkZAIZDw8WAh8BBQIxOGRkAh0PDxYCHwEFCTYgLSAxMSBUTmRkAiEPDxYCHwEFGuKCrCA2Mi45MCAoZXJtLiDigqwgMzYuMzUpZGQCIw8PFgIfAQU5VkhTIEV0YWdlbiwgMTA1NTEgQmVybGluLCBUdXJtc3RyLiA3NSwgUmF1bSAyMjEgKEF0ZWxpZXIpZGQCCw9kFgoCAQ8PFgIfAQUIVMO8cmtpcyFkZAIDDw8WAh8BBQxBY3J5bG1hbGVyZWlkZAIFDw8WAh8BBagJSW0gTWl0dGVscHVua3QgZGllc2VzIFdvcmtzaG9wcyBzdGVodCBkaWUgc3lzdGVtYXRpc2NoZSBBdXNlaW5hbmRlcnNldHp1bmcgbWl0IFTDvHJraXMsIGVpbmVyIEZhcmJlIGRlciBudXIgc2VsdGVuIGluIEZhcmJhbmFseXNlbiBkaWUgaWhyIGdlYsO8aHJlbmRlIEF1Zm1lcmtzYW1rZWl0IHp1IFRlaWwgd2lyZC4gRXMgdmVyZWludCBkaWUgS8O8aGxlIGRlcyBCbGF1cyB1bmQgZGllIE5hdMO8cmxpY2hrZWl0IGRlcyBHcsO8bnMgaW4gc2ljaC4gQXVzZ2VoZW5kIHZvbiBlaW5lciBBbmFseXNlIGRlcyBVbWdhbmdzIG1pdCBUw7xya2lzIGluIGRlciBrbGFzc2lzY2hlbiBNb2Rlcm5lIHVudGVyc3VjaGVuIHdpciBkaWUgdW50ZXJzY2hpZWRsaWNoc3RlbiBNw7ZnbGljaGtlaXRlbiBkZXMgVW1nYW5ncyBtaXQgZGVyIEZhcmJlIFTDvHJraXMgaW4gZGVyIE1hbGVyZWksIHZvbiBlaW5lbSBzcG9udGFuZW4gdW5kIGluc3Rpbmt0aXZlbiBIZXJhbmdlaGVuIGJpcyBoaW4genUga29uemVwdGlvbmVsbGVuIElkZWVuLCB2b24gZmlnw7xybGljaGVuIEJpbGR0aGVtZW4gYmlzIGhpbiB6dSBhYnN0cmFrdGVuIEtvbXBvc2l0aW9uZW4uIERhcyBadXNhbW1lbnNwaWVsIHZvbiBUw7xya2lzIG1pdCBhbmRlcmVuIEZhcmJlbiBzcGllbHQgZGFiZWkgZWluZSBncm/Dn2UgUm9sbGUgZWJlbnNvIHdpZSBkaWUgaGFuZHdlcmtsaWNoLXRlY2huaXNjaGVuIEFzcGVrdGUgZGVyIFVtc2V0enVuZyBkZXIgTWFsZXJlaS4gRGVyIEt1cnMgaXN0IHNvd29obCBmw7xyIEFuZsOkbmdlcippbm5lbiBhbHMgYXVjaCBmw7xyIEZvcnRnZXNjaHJpdHRlbmUgZ2VlaWduZXQuDQoNCkFuZHJlYXMgS3JhbWVyIHN0dWRpZXJ0ZSBHcmFmaWsgdW5kIE1hbGVyZWkgYW4gZGVyIEt1bnN0aG9jaHNjaHVsZSBCdXJnIEdpZWJpY2hlbnN0ZWluIEhhbGxlIHVuZCBNYWxlcmVpIGFuIGRlciBBY2NhZGVtaWEgZGkgQmVsbGUgQXJ0aSBpbiBWZW5lZGlnLiBTZWl0IDE5OTMgRG96ZW50dXJlbiBpbiBJdGFsaWVuIHVuZCBEZXV0c2NobGFuZCB1LmEuIGFscyBMZWhyYmVhdWZ0cmFndGVyIGFuIGRlciBVbml2ZXJzaXTDpHQgT3NuYWJyw7xjay4gd3d3LmFuZHJlYXMta3JhbWVyLmV1IA0KDQpZb3VyIGNvdXJzZSBpbnN0cnVjdG9yIGNhbiBhbnN3ZXIgeW91ciBxdWVzdGlvbnMgaW4gSXRhbGlhbiBhbmQgRW5nbGlzaCB3aGVuIHJlcXVpcmVkLmRkAgcPDxYCHwEF8wFCaXR0ZSBtaXRicmluZ2VuOiBBY3J5bGZhcmJlbiAoSW5kaXNjaGdlbGIsIEthZG1pdW1nZWxiLCBaaW5ubm9iZXJyb3QsIE1hZ2VudGEsIEthcm1pbnJvdCwgQ3lhbmJsYXUsIFVsdHJhbWFyaW5ibGF1LCBUaXRhbndlacOfLCBTY2h3YXJ6LCBPY2tlciBzb3dpZSBGYXJiZW4gbmFjaCBlaWdlbmVyIFdhaGwpLCBGbGFjaHBpbnNlbCwgU3BhY2h0ZWxuLCBBY3J5bG1hbGJsb2NrLCBMZWlud8OkbmRlIG9kZXIgTWFscGFwcGVuLiBkZAILDw8WAh8BBQpNaTIwNS0xNTNTZGQCDA8PFgIfAQUGNzU1OTkyZGQCDQ8PFgIfAQUGJm5ic3A7ZGQCCg9kFhxmD2QWBgIBDw8WAh8AZ2RkAgMPDxYCHwBoZGQCBQ8PFgIfAGhkZAIBD2QWBAIBDw8WAh8AZ2RkAgMPDxYCHwBoZGQCAg8PFgIfAQUFTWl0dGVkZAIDDw8WAh8BBQpNaTMwMS0zMDdTZGQCBA9kFgJmDw8WBB8BBRVRaSBHb25nIGFtIFdvY2hlbmVuZGUfDQUbQ291cnNlRGV0YWlsLmFzcHg/aWQ9NzY4MzA1ZGQCBQ8PFgIfAQUVMzAuMDUuMjAyNg0KMTA6MDAgVWhyZGQCBg8PFgIfAQUBMmRkAgcPDxYCHwEFBiZuYnNwO2RkAggPDxYCHwEFH+KCrCA0MC4wMDxiciAvPihlcm0uIOKCrCAyNS4wMClkZAIJDw8WAh8BBRMzMS4wNS4yMDI2IDE0OjAwOjAwZGQCCg9kFhYCAQ8PFgIfAQUVUWkgR29uZyBhbSBXb2NoZW5lbmRlZGQCAw8PFgIfAQUeRsO8ciBlaW5lbiBlbnRzcGFubnRlbiBSw7xja2VuZGQCBQ8PFgIfAQW2B0FuIGRpZXNlbSBXb2NoZW5lbmRlIGxlcm5lbiBTaWUgw5xidW5nZW4gYXVzIGRlbSBSw7xja2VuLVFpIEdvbmcga2VubmVuLCBtaXQgZGVuZW4gd2lyICB1bnNlciBvcHRpbWFsZXMgQmV3ZWd1bmdzcG90ZW50aWFsIGZpbmRlbiwgZGVubiB3aXIgZXJmYWhyZW4gZ2xlaWNoc2FtIE1vYmlsaXNpZXJ1bmcsIERlaG51bmcsIEtyw6RmdGlndW5nIHVuZCBFbnRzcGFubnVuZyBpbiBkaWVzZXIgdXJhbHRlbiBjaGluZXNpc2NoZW4gQmV3ZWd1bmdzbGVocmUuIERpZSBydWhpZ2UgQXVzZsO8aHJ1bmcgZGVyIMOcYnVuZ2VuIGVybcO2Z2xpY2h0IGVpbmUgZXJow7ZodGUgQXVmbWVya3NhbWtlaXQgYXVmIGRpZSBIYWx0dW5nIGRlciBXaXJiZWxzw6R1bGUgdW5kIGRlbiBCZXdlZ3VuZ3NhYmxhdWYsIHNvIGRhc3Mgd2lyIMOcYmVyc3Bhbm51bmdlbiB3YWhybmVobWVuIHVuZCBkaWUgQmV3ZWd1bmdlbiBsZWljaHQgdW5kIGdlc2NobWVpZGlnIHdlcmRlbiBsYXNzZW4ga8O2bm5lbi4gTmViZW4gZGVuIHBvc2l0aXZlbiBFZmZla3RlbiBkZXMgUsO8Y2tlbi1RaSBHb25nIMO8YmVydHLDpGd0IHNpY2ggZGFzIMOcYmVuIGluIGVudHNwYW5udGVtIEJld2VndW5nc2ZsdXNzIGhhcm1vbmlzaWVyZW5kIGF1ZiBkZW4gR2Vpc3QsIHNvIGRhc3Mgd2lyIG3DtmdsaWNoZW4gU3RyZXNzc2l0dWF0aW9uZW4gZGVzIEFsbHRhZ3MgZ2VsYXNzZW5lciBiZWdlZ25lbiBrw7ZubmVuLiBXaXIgw7xiZW4gaW0gU3RlaGVuIHVuZCBTaXR6ZW4gdW5kIExpZWdlbiwgRW50c3Bhbm51bmcgaW4gZGVyIFLDvGNrZW5sYWdlLg0KRXMgd2VyZGVuIGF1Y2ggRWxlbWVudGUgYXVzIGRlbSBIYXRoYSBZb2dhIGFuZ2Vib3RlbiwgZGllIGRlbiBLw7ZycGVyIHNhbmZ0IGRlaG5lbiwgDQpkaWUgQXRtdW5nIHZlcnRpZWZlbiB1bmQgZGllIEJld2VnbGljaGtlaXQgZGVyIFdpcmJlbHPDpHVsZSBmw7ZyZGVybi4NCg0KZGQCBw8PFgIfAQXUAUJpdHRlIGJlcXVlbWUgS2xlaWR1bmcsIGxlaWNodGUgU3BvcnRzY2h1aGUsIHdhcm1lIFNvY2tlbiwgZWluZSBEZWNrZSB1bmQgYmVpIEJlZGFyZiBlaW5lbiBrbGVpbmVuIFBhdXNlbmltYmlzcyBtaXRicmluZ2VuLiANCllvdXIgY291cnNlIGluc3RydWN0b3IgY2FuIGFuc3dlciB5b3VyIHF1ZXN0aW9ucyBpbiBFbmdsaXNoIG9yIEZyZW5jaCB3aGVuIHJlcXVpcmVkLg0KZGQCCw8PFgIfAQUKTWkzMDEtMzA3U2RkAg8PDxYCHwEFDEhlc2NoLCBLYXJpbmRkAhMPDxYCHwEFIzMwLjA1LjIwMjYgMTA6MDAgLSAzMS4wNS4yMDI2IDE0OjAwZGQCGQ8PFgIfAQUCMTBkZAIdDw8WAh8BBQg2IC0gOSBUTmRkAiEPDxYCHwEFGuKCrCA0MC4wMCAoZXJtLiDigqwgMjUuMDApZGQCIw8PFgIfAQVIVkhTIEJlcmxpbiBNaXR0ZSwgMTAxMTUgQmVybGluLCBMaW5pZW5zdHIuIDE2MiwgUmF1bSAwLjAzIChrbC4gVGFuenNhYWwpZGQCCw9kFgoCAQ8PFgIfAQUVUWkgR29uZyBhbSBXb2NoZW5lbmRlZGQCAw8PFgIfAQUeRsO8ciBlaW5lbiBlbnRzcGFubnRlbiBSw7xja2VuZGQCBQ8PFgIfAQW2B0FuIGRpZXNlbSBXb2NoZW5lbmRlIGxlcm5lbiBTaWUgw5xidW5nZW4gYXVzIGRlbSBSw7xja2VuLVFpIEdvbmcga2VubmVuLCBtaXQgZGVuZW4gd2lyICB1bnNlciBvcHRpbWFsZXMgQmV3ZWd1bmdzcG90ZW50aWFsIGZpbmRlbiwgZGVubiB3aXIgZXJmYWhyZW4gZ2xlaWNoc2FtIE1vYmlsaXNpZXJ1bmcsIERlaG51bmcsIEtyw6RmdGlndW5nIHVuZCBFbnRzcGFubnVuZyBpbiBkaWVzZXIgdXJhbHRlbiBjaGluZXNpc2NoZW4gQmV3ZWd1bmdzbGVocmUuIERpZSBydWhpZ2UgQXVzZsO8aHJ1bmcgZGVyIMOcYnVuZ2VuIGVybcO2Z2xpY2h0IGVpbmUgZXJow7ZodGUgQXVmbWVya3NhbWtlaXQgYXVmIGRpZSBIYWx0dW5nIGRlciBXaXJiZWxzw6R1bGUgdW5kIGRlbiBCZXdlZ3VuZ3NhYmxhdWYsIHNvIGRhc3Mgd2lyIMOcYmVyc3Bhbm51bmdlbiB3YWhybmVobWVuIHVuZCBkaWUgQmV3ZWd1bmdlbiBsZWljaHQgdW5kIGdlc2NobWVpZGlnIHdlcmRlbiBsYXNzZW4ga8O2bm5lbi4gTmViZW4gZGVuIHBvc2l0aXZlbiBFZmZla3RlbiBkZXMgUsO8Y2tlbi1RaSBHb25nIMO8YmVydHLDpGd0IHNpY2ggZGFzIMOcYmVuIGluIGVudHNwYW5udGVtIEJld2VndW5nc2ZsdXNzIGhhcm1vbmlzaWVyZW5kIGF1ZiBkZW4gR2Vpc3QsIHNvIGRhc3Mgd2lyIG3DtmdsaWNoZW4gU3RyZXNzc2l0dWF0aW9uZW4gZGVzIEFsbHRhZ3MgZ2VsYXNzZW5lciBiZWdlZ25lbiBrw7ZubmVuLiBXaXIgw7xiZW4gaW0gU3RlaGVuIHVuZCBTaXR6ZW4gdW5kIExpZWdlbiwgRW50c3Bhbm51bmcgaW4gZGVyIFLDvGNrZW5sYWdlLg0KRXMgd2VyZGVuIGF1Y2ggRWxlbWVudGUgYXVzIGRlbSBIYXRoYSBZb2dhIGFuZ2Vib3RlbiwgZGllIGRlbiBLw7ZycGVyIHNhbmZ0IGRlaG5lbiwgDQpkaWUgQXRtdW5nIHZlcnRpZWZlbiB1bmQgZGllIEJld2VnbGljaGtlaXQgZGVyIFdpcmJlbHPDpHVsZSBmw7ZyZGVybi4NCg0KZGQCBw8PFgIfAQXUAUJpdHRlIGJlcXVlbWUgS2xlaWR1bmcsIGxlaWNodGUgU3BvcnRzY2h1aGUsIHdhcm1lIFNvY2tlbiwgZWluZSBEZWNrZSB1bmQgYmVpIEJlZGFyZiBlaW5lbiBrbGVpbmVuIFBhdXNlbmltYmlzcyBtaXRicmluZ2VuLiANCllvdXIgY291cnNlIGluc3RydWN0b3IgY2FuIGFuc3dlciB5b3VyIHF1ZXN0aW9ucyBpbiBFbmdsaXNoIG9yIEZyZW5jaCB3aGVuIHJlcXVpcmVkLg0KZGQCCw8PFgIfAQUKTWkzMDEtMzA3U2RkAgwPDxYCHwEFBjc2ODMwNWRkAg0PDxYCHwEFBiZuYnNwO2RkAgsPZBYcZg9kFgQCAw8PFgIfAGdkZAIFDw8WAh8AaGRkAgEPZBYEAgEPDxYCHwBnZGQCAw8PFgIfAGhkZAICDw8WAh8BBQVNaXR0ZWRkAgMPDxYCHwEFCk1pMjEwLTA2MlNkZAIED2QWAmYPDxYEHwEFMURhcyBTbWFydHBob25lIGFscyBWaWRlb2thbWVyYSBhbSBCZWlzcGllbCBpUGhvbmUfDQUbQ291cnNlRGV0YWlsLmFzcHg/aWQ9NzY5MTgzZGQCBQ8PFgIfAQUVMzAuMDUuMjAyNg0KMTA6MDAgVWhyZGQCBg8PFgIfAQUDPiAyZGQCBw8PFgIfAQUYbnVyIG1pdCBCZXJhdHVuZyBidWNoYmFyZGQCCA8PFgIfAQUf4oKsIDU2LjUwPGJyIC8+KGVybS4g4oKsIDMyLjUwKWRkAgkPDxYCHwEFEzMxLjA1LjIwMjYgMTc6MDA6MDBkZAIKD2QWFgIBDw8WAh8BBTFEYXMgU21hcnRwaG9uZSBhbHMgVmlkZW9rYW1lcmEgYW0gQmVpc3BpZWwgaVBob25lZGQCAw8PFgIfAQVCVmlkZW9zIG1pdCBkZW0gaVBob25lIHByb2R1emllcmVuLCBiZWFyYmVpdGVuIHVuZCB2ZXLDtmZmZW50bGljaGVuZGQCBQ8PFgIfAQWpB0F1c2dlaGVuZCB2b24gcHJha3Rpc2NoZW4gw5xidW5nZW4genUgUmVnZWxuIHVuZCBNZXRob2RlbiBmw7xyIGRpZSBLYW1lcmFhcmJlaXQgd2VyZGVuIFNpZSBpbiBkaWVzZW0gS3VycyBpbiBkaWUgQW5mZXJ0aWd1bmcgZWlnZW5lciBTdG9yeWJvYXJkcywgZGllIFp1b3JkbnVuZyBwYXNzZW5kZXIgS2FtZXJhZWluc3RlbGx1bmdlbiwgZGllIGZpbG1pc2NoZSBVbXNldHp1bmcsIE5hY2hiZWFyYmVpdHVuZywgQXVzZ2FiZSB1bmQgVmVyw7ZmZmVudGxpY2h1bmcgbWl0IElocmVtIFNtYXJ0cGhvbmUgZWluZ2Vmw7xocnQuIERhYmVpIHdlcmRlbiBUZWNobmlzY2hlIERldGFpbHMsIEdlc3RhbHR1bmdzZ3J1bmRsYWdlbiwgS2VybnB1bmt0ZSB6dSBMaWNodC0gdW5kIFRvbmdlc3RhbHR1bmcgc293aWUgQWJsw6R1ZmUgenVyIER1cmNoZsO8aHJ1bmcgdm9uIEludGVydmlld3MgdmVybWl0dGVsdC4NCk1pdCBkZW4gZXJ3b3JiZW5lbiBLZW5udG5pc3NlbiB1bmQgRmVydGlna2VpdGVuIHNpbmQgU2llIGluIGRlciBMYWdlLCBlaWdlbmUgS3VyemZpbG1lIGluIHVudGVyc2NoaWVkbGljaGVuIEdlbnJlcyB6dSBrb256aXBpZXJlbiwgZGVyZW4gUHJvZHVrdGlvbiB2b3J6dWJlcmVpdGVuIHVuZCB1bXp1c2V0emVuLg0KDQpGw7xyIGRpZSBUZWlsbmFobWUgYW4gZGVuIMOcYnVuZ2VuIGJyaW5nZW4gU2llIGJpdHRlIElociBTbWFydHBob25lIG1pdCBldmVudHVlbGwgdm9yaGFuZGVuZW0gRXF1aXBtZW50IHNvd2llIGFsbGUgbsO2dGlnZW4gUGFzc3fDtnJ0ZXIgdW5kIEthYmVsIG1pdC4NCg0KQW5uYS1NYXJpYSBXZWJlciBpc3QgZnJlaXNjaGFmZmVuZGUgRG9rdW1lbnRhcmZpbG1lcmluIHVuZCBoYXQgQmlsZGVuZGUgS3Vuc3QsIEt1bnN0Z2VzY2hpY2h0ZSB1bmQgS3VsdHVyd2lzc2Vuc2NoYWZ0IHN0dWRpZXJ0Lnd3dy5hdWdlbnpldWdla3Vuc3QuZGVkZAIHDw8WAh8BBQINCmRkAgsPDxYCHwEFCk1pMjEwLTA2MlNkZAIPDw8WAh8BBRFXZWJlciwgQW5uYS1NYXJpYWRkAhMPDxYCHwEFIzMwLjA1LjIwMjYgMTA6MDAgLSAzMS4wNS4yMDI2IDE3OjAwZGQCGQ8PFgIfAQUCMTZkZAIdDw8WAh8BBQk4IC0gMTIgVE5kZAIhDw8WAh8BBRrigqwgNTYuNTAgKGVybS4g4oKsIDMyLjUwKWRkAiMPDxYCHwEFOVZIUyBCZXJsaW4gTWl0dGUsIDEwMTE1IEJlcmxpbiwgTGluaWVuc3RyLiAxNjIsIFJhdW0gMi4xMGRkAgsPZBYKAgEPDxYCHwEFMURhcyBTbWFydHBob25lIGFscyBWaWRlb2thbWVyYSBhbSBCZWlzcGllbCBpUGhvbmVkZAIDDw8WAh8BBUJWaWRlb3MgbWl0IGRlbSBpUGhvbmUgcHJvZHV6aWVyZW4sIGJlYXJiZWl0ZW4gdW5kIHZlcsO2ZmZlbnRsaWNoZW5kZAIFDw8WAh8BBakHQXVzZ2VoZW5kIHZvbiBwcmFrdGlzY2hlbiDDnGJ1bmdlbiB6dSBSZWdlbG4gdW5kIE1ldGhvZGVuIGbDvHIgZGllIEthbWVyYWFyYmVpdCB3ZXJkZW4gU2llIGluIGRpZXNlbSBLdXJzIGluIGRpZSBBbmZlcnRpZ3VuZyBlaWdlbmVyIFN0b3J5Ym9hcmRzLCBkaWUgWnVvcmRudW5nIHBhc3NlbmRlciBLYW1lcmFlaW5zdGVsbHVuZ2VuLCBkaWUgZmlsbWlzY2hlIFVtc2V0enVuZywgTmFjaGJlYXJiZWl0dW5nLCBBdXNnYWJlIHVuZCBWZXLDtmZmZW50bGljaHVuZyBtaXQgSWhyZW0gU21hcnRwaG9uZSBlaW5nZWbDvGhydC4gRGFiZWkgd2VyZGVuIFRlY2huaXNjaGUgRGV0YWlscywgR2VzdGFsdHVuZ3NncnVuZGxhZ2VuLCBLZXJucHVua3RlIHp1IExpY2h0LSB1bmQgVG9uZ2VzdGFsdHVuZyBzb3dpZSBBYmzDpHVmZSB6dXIgRHVyY2hmw7xocnVuZyB2b24gSW50ZXJ2aWV3cyB2ZXJtaXR0ZWx0Lg0KTWl0IGRlbiBlcndvcmJlbmVuIEtlbm50bmlzc2VuIHVuZCBGZXJ0aWdrZWl0ZW4gc2luZCBTaWUgaW4gZGVyIExhZ2UsIGVpZ2VuZSBLdXJ6ZmlsbWUgaW4gdW50ZXJzY2hpZWRsaWNoZW4gR2VucmVzIHp1IGtvbnppcGllcmVuLCBkZXJlbiBQcm9kdWt0aW9uIHZvcnp1YmVyZWl0ZW4gdW5kIHVtenVzZXR6ZW4uDQoNCkbDvHIgZGllIFRlaWxuYWhtZSBhbiBkZW4gw5xidW5nZW4gYnJpbmdlbiBTaWUgYml0dGUgSWhyIFNtYXJ0cGhvbmUgbWl0IGV2ZW50dWVsbCB2b3JoYW5kZW5lbSBFcXVpcG1lbnQgc293aWUgYWxsZSBuw7Z0aWdlbiBQYXNzd8O2cnRlciB1bmQgS2FiZWwgbWl0Lg0KDQpBbm5hLU1hcmlhIFdlYmVyIGlzdCBmcmVpc2NoYWZmZW5kZSBEb2t1bWVudGFyZmlsbWVyaW4gdW5kIGhhdCBCaWxkZW5kZSBLdW5zdCwgS3Vuc3RnZXNjaGljaHRlIHVuZCBLdWx0dXJ3aXNzZW5zY2hhZnQgc3R1ZGllcnQud3d3LmF1Z2VuemV1Z2VrdW5zdC5kZWRkAgcPDxYCHwEFAg0KZGQCCw8PFgIfAQUKTWkyMTAtMDYyU2RkAgwPDxYCHwEFBjc2OTE4M2RkAg0PDxYCHwEFBiZuYnNwO2RkAhkPDxYCHwEFEUt1cnNzdWNoZSDDpG5kZXJuZGQCGw8PFgIfAQUUVHJlZmZlcmxpc3RlIGFscyBQREZkZAIdD2QWCAIBDw8WAh8BBQpIaW53ZWlzZTogZGQCAw8PFgIfAQWHAVdlbm4gU2llIGF1ZiBlaW5lbiBLdXJzdGl0ZWwga2xpY2tlbiwgZXJoYWx0ZW4gU2llIHdlaXRlcmUgPHNwYW4gc3R5bGU9ImZvbnQtd2VpZ2h0OmJvbGQiPkRldGFpbHM8L3NwYW4+IHp1bSBqZXdlaWxpZ2VuIEt1cnMgYW5nZXplaWd0LmRkAgUPDxYCHwEFfkR1cmNoIEtsaWNrZW4gYXVmIGVpbmUgPHNwYW4gc3R5bGU9ImZvbnQtd2VpZ2h0OmJvbGQiPlNwYWx0ZW7DvGJlcnNjaHJpZnQ8L3NwYW4+IGvDtm5uZW4gU2llIGRpZSBTb3J0aWVydW5nIGRlciBMaXN0ZSDDpG5kZXJuLmRkAgcPDxYCHwEFywFVbSBzaWNoIGJlaSBlaW5lbSBiZWxlZ3RlbiAgS3VycyBpbiBkaWUgPHNwYW4gc3R5bGU9ImNvbG9yOmJsYWNrO2ZvbnQtd2VpZ2h0OmJvbGQ7Ij5XYXJ0ZWxpc3RlPC9zcGFuPiBhdWZuZWhtZW4genUgbGFzc2VuLCBsZWdlbiBTaWUgaWhuIGJpdHRlIGluIGRlbiBXYXJlbmtvcmIgdW5kIGZvbGdlbiBkZW4gw7xibGljaGVuIEJ1Y2h1bmdzc2Nocml0dGVuLmRkGAEFHl9fQ29udHJvbHNSZXF1aXJlUG9zdEJhY2tLZXlfXxYcBSVjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDAxJGN0bDAxBSVjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDAxJGN0bDAyBSVjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDAxJGN0bDA0BSVjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDAxJGN0bDA1BTZjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDAzJGJ0bkFkZFRvQmFza2V0SW5hY3RpdmUFNmN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMDMkYnRuQWRkVG9XaXNoTGlzdEFjdGl2ZQU0Y3RsMDAkQ29udGVudCRJTERhdGFHcmlkMSRjdGwwNCRidG5BZGRUb0Jhc2tldEFjdGl2ZQU2Y3RsMDAkQ29udGVudCRJTERhdGFHcmlkMSRjdGwwNCRidG5BZGRUb1dpc2hMaXN0QWN0aXZlBTZjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDA1JGJ0bkFkZFRvQmFza2V0SW5hY3RpdmUFNmN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMDUkYnRuQWRkVG9XaXNoTGlzdEFjdGl2ZQU0Y3RsMDAkQ29udGVudCRJTERhdGFHcmlkMSRjdGwwNiRidG5BZGRUb0Jhc2tldEFjdGl2ZQU2Y3RsMDAkQ29udGVudCRJTERhdGFHcmlkMSRjdGwwNiRidG5BZGRUb1dpc2hMaXN0QWN0aXZlBTRjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDA3JGJ0bkFkZFRvQmFza2V0QWN0aXZlBTZjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDA3JGJ0bkFkZFRvV2lzaExpc3RBY3RpdmUFNGN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMDgkYnRuQWRkVG9CYXNrZXRBY3RpdmUFNmN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMDgkYnRuQWRkVG9XaXNoTGlzdEFjdGl2ZQU0Y3RsMDAkQ29udGVudCRJTERhdGFHcmlkMSRjdGwwOSRidG5BZGRUb0Jhc2tldEFjdGl2ZQU2Y3RsMDAkQ29udGVudCRJTERhdGFHcmlkMSRjdGwwOSRidG5BZGRUb1dpc2hMaXN0QWN0aXZlBTRjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDEwJGJ0bkFkZFRvQmFza2V0QWN0aXZlBTZjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDEwJGJ0bkFkZFRvV2lzaExpc3RBY3RpdmUFNGN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMTEkYnRuQWRkVG9CYXNrZXRBY3RpdmUFNmN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMTEkYnRuQWRkVG9XaXNoTGlzdEFjdGl2ZQU2Y3RsMDAkQ29udGVudCRJTERhdGFHcmlkMSRjdGwxMiRidG5BZGRUb0Jhc2tldEluYWN0aXZlBTZjdGwwMCRDb250ZW50JElMRGF0YUdyaWQxJGN0bDEyJGJ0bkFkZFRvV2lzaExpc3RBY3RpdmUFJWN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMTQkY3RsMDEFJWN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMTQkY3RsMDIFJWN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMTQkY3RsMDQFJWN0bDAwJENvbnRlbnQkSUxEYXRhR3JpZDEkY3RsMTQkY3RsMDWxEFYPRFRN6gMup/jDvjpRtzqneMAE5iKd/gfsW+Z74Q==" />
+</div>
+
+<script language="javascript">
+function SetRowColor(row, colorBackground, colorText)
+{
+	var nIdx;
+	var nNofCells;
+
+	nNofCells = row.cells.length;
+	for ( nIdx=0; nIdx<nNofCells; nIdx++ )
+	{
+		row.cells[nIdx].style.backgroundColor = colorBackground;
+		row.cells[nIdx].style.color = colorText;
+	}
+}
+function CheckboxClicked(e)
+{
+	if ( navigator.appName.indexOf("Netscape") != -1 )
+	{
+		e.stopPropagation();
+	}
+	else
+	{
+		window.event.cancelBubble = true;
+	}
+}
+</script>
+
+<script src="/VHSKURSE/ScriptResource.axd?d=LPTmI7CZ2oJibX3SgZRERjdc0o9g130P51B7A8WWIWspYOjKS2vPQ0w2yKfdETEQHAqB8hYCnSmlvpoByoiW1jn3_DG0zU4K46ma6pscJ4RUesKXOr7_GIBe7Jl_wTuFFoTqQoxxcReUI8LKnhXIkBXfaj4MZvGnyaAZtRq_1CvrMJweAHU2edhsas35IJUs0&amp;t=5c0e0825" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+if (typeof(Sys) === 'undefined') throw new Error('Fehler beim Laden des clientseitigen ASP.NET Ajax-Frameworks.');
+//]]>
+</script>
+
+<script src="/VHSKURSE/ScriptResource.axd?d=g2ttaQ6nahhD0dJcqx0DuJLmuyrz2GQHosQg87M4K1jHTGBs1GkDTJvPXyMGwtaQOP-fgG4WVG-QWZlkNQb6JjNuDllhGPfLtvKPQYStGBBHOzBJ6QOX1Pzr2SDLbn9gZLw5OSayXk9uBMqFnw5UyQ2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=Fa9wb_zf1Jzm_OkfAWdeCcWoouKJlFvd3ndlHXXi6z9492thhJfzLbv5xrQ7IE2mHA6PDZQYnGSwng6PLKk3i1VPe2_A_Aqg0Ny_oWepQ3X5FXuGm9r8U8AwqiotfacVUvsN8L9igQF0lUbqnBsfsg2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=1FHQZTc9v62qfOWzmIpXKlzRSbVpTd33e_udatrFKU4b8yuRy7Dys--DtYpjZ7kPDiBoCNOX6oI5VRyPPmKB7bwxjMkRu_Hzp6vsjqbQBwInvVP-QuRkNY1U2KsWwHeL0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=VhEwNC3cHGJ2M5K9C5Gq5Rh7PeUoPo1wSg-ADMpJb1mklq-QyMPCEO6YHTeIoAqsGfsd6euH0mB4dW69SWBH1Rn_SXPPGtPTpQMHisqFG81o83P7Dt89kLljTqjF7uNv2c9K3Da4c8h0Rf_66sSHoA2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=5BVhE2KjyV7PNAfE6kgfE4DPPfRRpT_Dacd002ydP1zJ2s6HONIUHzSFk27gtvviuqCdsxiS-xxj-EJaKBfbZZaEQb1PZcYPbLq08MS35ofDfNvBwHhd-kOzWQzxmxlKzKvKyV0hlZLUWSKTV__wHQ2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=TgxnkJ8meMGD4Jj3VKWVLpop1lZLKogGeVX3-gP_fG-QNyMa9lJdesBrc6t-tUOPmdoCrG1vNbry6uP0fOEY1zaCT-FC9LKzTcDjPKY7-TCyS8wpjuqsY26XehNPDgM9vDnC_5L1cwPKpJdGahYoLQ2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=1nJQXyzqiOIH0orh6U7w8SaG9dvfqc2W3XX3MenWoTYU9zkKJ7rRe8JlWeaIA01y5nnPa6FaocXYudDC8Hp28I_DfODNPkC-RBlhOTccw7mB1xecb7QfeJU7ogrIvq2-mh0TC7HzdW1VEwiu0RjSYw2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=dFlM2RwK-tZKx1M7LKHVy8Id_Qso5RLIJiKkn59BnmCvOyjdIkWMmIks3pG8oI348Ht_X8mcBzaUmLHFxLvA2ryLwUQdbGwgnGa0SPKI9OxYkrOkAfnFVxgGEGQZoQHQaAqX-2Ezy6rWs08OsFntwg2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=MFLmWBLE02crxTjGIBtmGId1PZn1l2qrzMJseFHT6r0fIavnr5Udk7_FWvoKsaE3ydhRoRmtF9Jt1dP5ATms216l9sqANfdWksTpMEFKDMkxFHxR3DSeAQtDXmdvO0FduS6T8R4huoV-qDbb-vs8IA2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=dQuwHMe72UsanhTRpdepW_SZcQP2Hg5vfXkjdNokuakb9h9IBNcHEQuYU17PBc18YOy8di5-y7TO5V_KbwO5xn0ON1krlZJ3_VPz9JerRxl2wltFk2GI_I6YaN9Si3dd1wuMvoehfFCk6bX88JsWcw2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=dRJ2X9s-1A8zPE83NuPYAkKaPgD9W-gx_w87Mxm6WjBVnJRLWGNToeiERDRyfMDA8WVCWJfzkZQZt57c0wPQD98UepBRZOOJFTQ58rvJLE_IVAHZK67ZsQyKrwLCBduF3m_XFfpFZdCq8Apf7qO1-Q2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=PlX5BwX-D8SArwsOm3VNWw2GmJtUTwo4D8CvUXy13BaZiQdxrbt0RNN9Bl2Y9jXKIoT2eJ-58rVoBqGKCrbfaOh0FhxGEraopdMDXRJr2UgeXhKvv2g8NvI8hKYPtwRI0&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=FFKEvbi9mlbb8B579mogFDchAATkmmuwJxFez3hzyVgAKo7yBpM3LW17Ifm8_mZ6b_Pu0xe9DXQTDiqPRl_nf4pYwlFujgBXGLKqpSQvvZYsp5tvzraoilDNv4e_CR1406MQFP0Wd8a-E9TIJRZksw2&amp;t=7d5986a" type="text/javascript"></script>
+<script src="/VHSKURSE/ScriptResource.axd?d=NRQH88Hd9L8BXZDzK5Xa503QTZn5sKq5uXhZM51R3bCAkOGnfb6WeVtP2QlNW3F9vfx7GzGuxURSTkiSUktkS0T8CWzt_Kr1KKDr3KV0wOqFqDJXwbATNFTp4C14GFh1hfWnyKQPymPH91LkfTTEaw2&amp;t=7d5986a" type="text/javascript"></script>
+        <!-- VHS-Kopfzeile einschl. Menüleiste oben -->
+        <div id="bobody">
+            <a class="boblind" href="#bohelp">Hilfe f&uuml;r Schnellzugriffstasten</a>
+            <div id="bocontent" class="bocontent">
+                <!--navi ende-->
+                <div id="alles">
+                    <!-- Anfang Hauptnavigation -->
+
+                    <!-- Änderung Anfang HPU VHS-IT -->
+                    <!-- Anfang Metanavigation -->
+                    <div id="metanavigation">
+                        <ul>
+                            <li><a href="/VHSKURSE/vhs_texte/sitemap.aspx" target="_blank">Sitemap</a></li>
+                            <li><a href="/VHSKURSE/vhs_texte/Impressum.aspx" target="_blank">Impressum</a></li>
+                            <li><a href="/VHSKURSE/vhs_texte/Datenschutz.aspx" target="_blank">Datenschutzerkl&auml;rung</a></li>
+                            <li><a href="/VHSKURSE/vhs_texte/Barrierefreiheit.aspx" target="_blank">Erklärung zur Barrierefreiheit</a></li>
+                        </ul>
+                    </div>
+                    <!-- Ende Metanavigation -->
+                    <!-- Änderung Ende HPU VHS-IT -->
+
+                    <!-- linkes Menü -->
+                    <!-- Anfang Navigation links -->
+                    <div id="navigation">
+                        <div id="logo">
+                            <a href="https://www.berlin.de/vhs/index.php" rel="start">
+                                <img src="/VHSKURSE/Design/Pictures/logovhs.gif" title="Logo der Berliner Volkshochschulen" />
+                            </a>
+                        </div>
+                        <ul>
+                            <li><a href="https://www.berlin.de/vhs/index.php" title="Startseite">Startseite</a></li>
+                            <li><a href="https://www.berlin.de/vhs/volkshochschulen/" title="Zu den zwölf Berliner Volkshochschulen">Zu den zwölf Berliner Volkshochschulen</a></li>
+                            <!-- Änderung HPU
+					<li><a href="/VHSKURSE/BusinessPages/CourseSearch.aspx" title="Kurse suchen & buchen">Kurse suchen & buchen</a></li>
+					-->
+                            <li><a href="https://www.berlin.de/vhs/ueber-uns/" title="Wir über uns">Wir über uns</a></li>
+                        </ul>
+                        <div id="abteilungen">
+                            
+                                
+<ul>
+	
+	<li id="ctl00_LeftMenuContent_LeftMenu1_listItemCourseSearch">
+		<a id="ctl00_LeftMenuContent_LeftMenu1_lbtnCourseSearch" href="javascript:__doPostBack(&#39;ctl00$LeftMenuContent$LeftMenu1$lbtnCourseSearch&#39;,&#39;&#39;)">Kurssuche</a>
+	</li>
+	<li id="ctl00_LeftMenuContent_LeftMenu1_listItemCart">
+		<a onclick="return false;" id="ctl00_LeftMenuContent_LeftMenu1_lbtnCart" class="LinkButtonDisabled" href="javascript:__doPostBack(&#39;ctl00$LeftMenuContent$LeftMenu1$lbtnCart&#39;,&#39;&#39;)">Warenkorb (0)</a>
+	</li>
+	<li id="ctl00_LeftMenuContent_LeftMenu1_listItemAccountTitle" style="background-image:none; padding-left:6px; font-weight:bold">
+		<span id="ctl00_LeftMenuContent_LeftMenu1_lblMyAccountTitle">Mein Konto</span>
+	</li>
+	
+    
+	<li id="ctl00_LeftMenuContent_LeftMenu1_listItemUserLogin">
+		<a id="ctl00_LeftMenuContent_LeftMenu1_lbtnUserLogin" href="javascript:__doPostBack(&#39;ctl00$LeftMenuContent$LeftMenu1$lbtnUserLogin&#39;,&#39;&#39;)">Login</a>
+	</li>
+	<li id="ctl00_LeftMenuContent_LeftMenu1_listItemUserAccount">
+		<a id="ctl00_LeftMenuContent_LeftMenu1_lbtnUserAccount" href="javascript:__doPostBack(&#39;ctl00$LeftMenuContent$LeftMenu1$lbtnUserAccount&#39;,&#39;&#39;)">Jetzt registrieren</a>
+	</li>
+	<li id="ctl00_LeftMenuContent_LeftMenu1_listItemNewPassword">
+		<a id="ctl00_LeftMenuContent_LeftMenu1_lbtnNewPassword" href="javascript:__doPostBack(&#39;ctl00$LeftMenuContent$LeftMenu1$lbtnNewPassword&#39;,&#39;&#39;)">Passwort vergessen</a>
+	</li>
+	
+	
+</ul>
+                            
+                        </div>
+                    </div>
+                    <!-- Ende Navigation links -->
+
+                    <!-- Änderungen Anfang HPU VHS-IT -->
+                    <!-- Navigation rechts -->
+                    <div id="containerbereich">
+
+                        
+
+                        <div class="container">
+                            <h3>Kontakt</h3>
+                            <div>
+                                <a href="https://www.berlin.de/vhs/service/formular.406135.php" target="_blank">Ihre Nachricht an uns</a>
+                                <br />
+                                <br />
+                                <a href="https://www.berlin.de/vhs/volkshochschulen/" target="_blank">Adressen der Berliner VHS</a><br />
+                            </div>
+                        </div>
+
+                        <div class="container">
+                            <h3>Hilfe & AGB</h3>
+                            <!--
+                    <div>
+                        <a href="/VHSKURSE/vhs_texte/Info_Kursfinden.aspx" target="_blank">Hilfe zur Kurssuche</a>
+                        <br />
+                        <a href="/VHSKURSE/vhs_texte/Info_Anmelden.aspx" target="_blank">Hilfe zur Kursbuchung</a>
+                        <br />
+                        <a href="/VHSKURSE/vhs_texte/Datenschutz.aspx" target="_blank">Datenschutz</a>
+                        <br />
+                        <a href="/VHSKURSE/vhs_texte/Barrierefreiheit.aspx" target="_blank">Erklärung zur Barrierefreiheit</a>
+                        <br />
+                        <a href="/VHSKURSE/vhs_texte/Barrierefreiheit.aspx" target="_blank">Erklärung zur Barrierefreiheit</a>
+                        <br />
+						<a href="https://www.berlin.de/vhs/service/geschaeftsbedingungen/index.html" target="_blank">Geschäftsbedingungen</a>
+						<br />
+					    <a href="https://www.berlin.de/vhs/service/buchen-und-bezahlen/widerrufsbelehrung-428567.php" target="_blank">Widerrufsbelehrung</a>
+						<br />
+                    </div>
+                    -->
+                            <!-- ohne target="_blank" -->
+                            <div>
+                                <a href="/VHSKURSE/vhs_texte/Info_Kursfinden.aspx" target="_blank">Hilfe zur Kurssuche</a>
+                                <br />
+                                <a href="/VHSKURSE/vhs_texte/Info_Anmelden.aspx" target="_blank">Hilfe zur Kursbuchung</a>
+                                <br />
+                                <a href="/VHSKURSE/vhs_texte/Datenschutz.aspx" target="_blank">Datenschutz</a>
+                                <br />
+                                <a href="/VHSKURSE/vhs_texte/Barrierefreiheit.aspx" target="_blank">Erklärung zur Barrierefreiheit</a>
+                                <br />
+                                <a href="https://www.berlin.de/vhs/service/geschaeftsbedingungen/" title="Geschäftsbedingungen" target="_blank">Geschäftsbedingungen</a>
+                                <br />
+                                <a href="https://www.berlin.de/vhs/service/buchen-und-bezahlen/widerrufsbelehrung/index.php" title="Widerrufsbelehrung" target="_blank">Widerrufsbelehrung</a>
+                                <br />
+                                <a href="https://www.berlin.de/vhs/service/buchen-und-bezahlen/sepa_lastschriftmandat_2023_neu.pdf" title="SEPA-Lastschriftmandat" target="_blank">SEPA-Lastschriftmandat</a>
+                                <br />
+                            </div>
+                        </div>
+                        <!--
+                <div class="container">
+                <h3>Newsletter</h3>
+                    <div>
+                        <a href="https://www.berlin.de/vhs/newsletter/index.html"><img src="https://www.berlin.de/imperia/md/images/volkshochschulen/zentraleinhalte/button_newsletter.gif" alt="Button Newsletter"/></a><br />
+                        <br />
+                        <a href="https://www.berlin.de/vhs/newsletter/index.html">Newsletter abonnieren</a>
+                    </div>
+                </div>
+                -->
+
+                    </div>
+                    <!-- Ende Navigation rechts -->
+                    <!-- Ende Container- bzw. Marginalienspalte -->
+                    <!-- Änderung Ende HPU VHS-IT -->
+
+                    <!-- Container für gesamtes Formular -->
+                    <div id="bomain">
+                        <!-- Content beginning -->
+                        
+    
+    <!-- ?berschrift -->
+    <h1>
+        <span id="ctl00_Content_lblTitle">Kursliste</span>
+    </h1>
+    <br />
+    <div>
+        <!-- Fehlernachrichten -->
+        
+        
+        
+        
+        
+        
+        <br />
+        <br />
+        
+        <div>
+            <span id="ctl00_Content_lblMessage1All" class="LabelNoSize">Anzahl Treffer:  312</span>
+        </div>
+    </div>
+    <br />
+    <!-- Schaltfl?chen -->
+    <div>
+        <input type="submit" name="ctl00$Content$btnCourseSearchTop" value="Kurssuche ändern" id="ctl00_Content_btnCourseSearchTop" tabindex="3" class="ButtonLarge" />
+        &nbsp; &nbsp;
+        <input type="submit" name="ctl00$Content$btnPDFTop" value="Trefferliste als PDF" id="ctl00_Content_btnPDFTop" class="ButtonLarge" />
+        &nbsp; &nbsp;
+        <div style="display:inline;vertical-align:middle;">
+        <select name="ctl00$Content$cmbListView" id="ctl00_Content_cmbListView" style="width:150px;">
+	<option selected="selected" value="Überblick">&#220;berblick</option>
+	<option value="Detailansicht">Detailansicht</option>
+	<option value="Kursinhalte">Kursinhalte</option>
+
+</select>
+        </div>
+    </div>
+    <br />
+    <!--<APPLICATION_CONTENT>-->
+    <!-- Kursliste -->
+    <table class="DataGrid" cellspacing="1" cellpadding="3" align="Left" id="ctl00_Content_ILDataGrid1">
+	<tr class="DataGridPager" align="right">
+		<td class="DataGridPager" align="center" colspan="9" style="border-width:0px;border-style:None;"><table cellspacing="0" cellpadding="1" style="border-width:0px;border-style:None;border-collapse:collapse;">
+			<tr style="border-width:0px;">
+				<td class="DataGridPager"><input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl01" class="DataGridPager" src="../Design/Pictures/grid/arrow_leftend.svg" align="absmiddle" /></td><td class="DataGridPager"><input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl02" class="DataGridPager" src="../Design/Pictures/grid/arrow_left.svg" align="absmiddle" /></td><td class="DataGridPager"><span class="DataGridPager">Seite 2 von 32</span></td><td class="DataGridPager"><input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl04" class="DataGridPager" src="../Design/Pictures/grid/arrow_right.svg" align="absmiddle" /></td><td class="DataGridPager"><input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl05" class="DataGridPager" src="../Design/Pictures/grid/arrow_rightend.svg" align="absmiddle" /></td>
+			</tr>
+		</table></td>
+	</tr><tr class="DataGridHeader">
+		<td class="DataGridColumnBasket">&nbsp;</td><td class="DataGridColumnWishList">&nbsp;</td><td title="sortieren nach:Bezirk" class="DataGridColumnDistrict"><a href="javascript:__doPostBack(&#39;ctl00$Content$ILDataGrid1$ctl02$ctl00&#39;,&#39;&#39;)">Bezirk</a></td><td title="sortieren nach:Kursnummer" class="DataGridColumnCourseNumber"><a href="javascript:__doPostBack(&#39;ctl00$Content$ILDataGrid1$ctl02$ctl01&#39;,&#39;&#39;)">Kursnummer</a></td><td title="sortieren nach:Kurstitel" class="DataGridColumnCourseTitle"><a href="javascript:__doPostBack(&#39;ctl00$Content$ILDataGrid1$ctl02$ctl02&#39;,&#39;&#39;)">Kurstitel</a></td><td title="sortieren nach:Beginn" class="DataGridColumnCourseBegin"><a href="javascript:__doPostBack(&#39;ctl00$Content$ILDataGrid1$ctl02$ctl03&#39;,&#39;&#39;)">Beginn</a></td><td title="sortieren nach:freie Plätze" class="DataGridColumnPlaces"><a href="javascript:__doPostBack(&#39;ctl00$Content$ILDataGrid1$ctl02$ctl04&#39;,&#39;&#39;)">freie Plätze</a></td><td title="sortieren nach:Hinweis" class="DataGridColumnBooking"><a href="javascript:__doPostBack(&#39;ctl00$Content$ILDataGrid1$ctl02$ctl05&#39;,&#39;&#39;)">Hinweis</a></td><td title="sortieren nach:Entgelt" class="DataGridColumnCosts"><a href="javascript:__doPostBack(&#39;ctl00$Content$ILDataGrid1$ctl02$ctl06&#39;,&#39;&#39;)">Entgelt</a></td>
+	</tr><tr class="DataGridItem">
+		<td class="DataGridItemBasket">
+                    
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl03$btnAddToBasketInactive" id="ctl00_Content_ILDataGrid1_ctl03_btnAddToBasketInactive" disabled="disabled" title="Kurs kann nicht mehr gebucht werden, da er bereits begonnen hat" class="aspNetDisabled" src="../Design/Pictures/basket_inactive.gif" />
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl03$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl03_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi404-L020S-5</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=776170">Deutsch Integrationskurs B1.1</a></td><td class="DataGridItemCourseBegin">29.05.2026
+08:30 Uhr</td><td class="DataGridItemPlaces">belegt</td><td class="DataGridItemBooking">nur mit Beratung durch ausf. VHS buchbar</td><td class="DataGridItemCosts" align="center">¤ 235.00 </td>
+	</tr><tr class="DataGridAlternatingItem">
+		<td class="DataGridItemBasket">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl04$btnAddToBasketActive" id="ctl00_Content_ILDataGrid1_ctl04_btnAddToBasketActive" title="Kurs zum Warenkorb hinzuf?gen" src="../Design/Pictures/basket_active.gif" />
+                    
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl04$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl04_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi428-925S</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=771869">Gebärdensprache - DGS 10 am Vormittag</a></td><td class="DataGridItemCourseBegin">29.05.2026
+09:30 Uhr</td><td class="DataGridItemPlaces">> 2</td><td class="DataGridItemBooking">&nbsp;</td><td class="DataGridItemCosts" align="center">¤ 89.00<br />(erm. ¤ 49.50)</td>
+	</tr><tr class="DataGridItem">
+		<td class="DataGridItemBasket">
+                    
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl05$btnAddToBasketInactive" id="ctl00_Content_ILDataGrid1_ctl05_btnAddToBasketInactive" disabled="disabled" title="Kurs kann nicht mehr gebucht werden, da er bereits begonnen hat" class="aspNetDisabled" src="../Design/Pictures/basket_inactive.gif" />
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl05$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl05_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi109-100F</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=768225">Cooking for Peace Kochabend: Alt & Neu-Berliner*innen</a></td><td class="DataGridItemCourseBegin">29.05.2026
+18:00 Uhr</td><td class="DataGridItemPlaces">2</td><td class="DataGridItemBooking">nur mit Beratung buchbar</td><td class="DataGridItemCosts" align="center">¤ 20.00<br />(erm. ¤ 20.00)</td>
+	</tr><tr class="DataGridAlternatingItem">
+		<td class="DataGridItemBasket">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl06$btnAddToBasketActive" id="ctl00_Content_ILDataGrid1_ctl06_btnAddToBasketActive" title="Kurs zum Warenkorb hinzuf?gen" src="../Design/Pictures/basket_active.gif" />
+                    
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl06$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl06_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi506-018F-O</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=768616">Existenzgründung kompakt</a></td><td class="DataGridItemCourseBegin">29.05.2026
+18:00 Uhr</td><td class="DataGridItemPlaces">> 2</td><td class="DataGridItemBooking">&nbsp;</td><td class="DataGridItemCosts" align="center">¤ 68.00<br />(erm. ¤ 39.00)</td>
+	</tr><tr class="DataGridItem">
+		<td class="DataGridItemBasket">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl07$btnAddToBasketActive" id="ctl00_Content_ILDataGrid1_ctl07_btnAddToBasketActive" title="Kurs zum Warenkorb hinzuf?gen" src="../Design/Pictures/basket_active.gif" />
+                    
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl07$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl07_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi109-903F</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=768201">Wandern in der Uckermark - von Chorin nach Brodowin</a></td><td class="DataGridItemCourseBegin">30.05.2026
+09:45 Uhr</td><td class="DataGridItemPlaces">> 2</td><td class="DataGridItemBooking">&nbsp;</td><td class="DataGridItemCosts" align="center">¤ 31.20<br />(erm. ¤ 19.60)</td>
+	</tr><tr class="DataGridAlternatingItem">
+		<td class="DataGridItemBasket">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl08$btnAddToBasketActive" id="ctl00_Content_ILDataGrid1_ctl08_btnAddToBasketActive" title="Kurs zum Warenkorb hinzuf?gen" src="../Design/Pictures/basket_active.gif" />
+                    
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl08$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl08_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi201-044S</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=753672">Offene Schreibwerkstatt</a></td><td class="DataGridItemCourseBegin">30.05.2026
+10:00 Uhr</td><td class="DataGridItemPlaces">> 2</td><td class="DataGridItemBooking">&nbsp;</td><td class="DataGridItemCosts" align="center">¤ 17.00<br />(erm. ¤ 17.00)</td>
+	</tr><tr class="DataGridItem">
+		<td class="DataGridItemBasket">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl09$btnAddToBasketActive" id="ctl00_Content_ILDataGrid1_ctl09_btnAddToBasketActive" title="Kurs zum Warenkorb hinzuf?gen" src="../Design/Pictures/basket_active.gif" />
+                    
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl09$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl09_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi301-190S</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=754597">Fußreflexzonenmassage</a></td><td class="DataGridItemCourseBegin">30.05.2026
+10:00 Uhr</td><td class="DataGridItemPlaces">belegt</td><td class="DataGridItemBooking">Aufnahme in Warteliste möglich</td><td class="DataGridItemCosts" align="center">¤ 33.60<br />(erm. ¤ 21.60)</td>
+	</tr><tr class="DataGridAlternatingItem">
+		<td class="DataGridItemBasket">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl10$btnAddToBasketActive" id="ctl00_Content_ILDataGrid1_ctl10_btnAddToBasketActive" title="Kurs zum Warenkorb hinzuf?gen" src="../Design/Pictures/basket_active.gif" />
+                    
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl10$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl10_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi205-153S</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=755992">Türkis!</a></td><td class="DataGridItemCourseBegin">30.05.2026
+10:00 Uhr</td><td class="DataGridItemPlaces">belegt</td><td class="DataGridItemBooking">Aufnahme in Warteliste möglich</td><td class="DataGridItemCosts" align="center">¤ 62.90<br />(erm. ¤ 36.35)</td>
+	</tr><tr class="DataGridItem">
+		<td class="DataGridItemBasket">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl11$btnAddToBasketActive" id="ctl00_Content_ILDataGrid1_ctl11_btnAddToBasketActive" title="Kurs zum Warenkorb hinzuf?gen" src="../Design/Pictures/basket_active.gif" />
+                    
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl11$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl11_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi301-307S</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=768305">Qi Gong am Wochenende</a></td><td class="DataGridItemCourseBegin">30.05.2026
+10:00 Uhr</td><td class="DataGridItemPlaces">2</td><td class="DataGridItemBooking">&nbsp;</td><td class="DataGridItemCosts" align="center">¤ 40.00<br />(erm. ¤ 25.00)</td>
+	</tr><tr class="DataGridAlternatingItem">
+		<td class="DataGridItemBasket">
+                    
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl12$btnAddToBasketInactive" id="ctl00_Content_ILDataGrid1_ctl12_btnAddToBasketInactive" disabled="disabled" title="Kurs kann nicht mehr gebucht werden, da er bereits begonnen hat" class="aspNetDisabled" src="../Design/Pictures/basket_inactive.gif" />
+                    
+                </td><td class="DataGridColumnWishList">
+                    <input type="image" name="ctl00$Content$ILDataGrid1$ctl12$btnAddToWishListActive" id="ctl00_Content_ILDataGrid1_ctl12_btnAddToWishListActive" title="Kurs zum Merkzettel hinzuf?gen" src="../Design/Pictures/wishlist_activ.gif" />
+                    
+                </td><td class="DataGridItemDistrict">Mitte</td><td class="DataGridItemCourseNumber">Mi210-062S</td><td class="DataGridItemCourseTitle"><a href="CourseDetail.aspx?id=769183">Das Smartphone als Videokamera am Beispiel iPhone</a></td><td class="DataGridItemCourseBegin">30.05.2026
+10:00 Uhr</td><td class="DataGridItemPlaces">> 2</td><td class="DataGridItemBooking">nur mit Beratung buchbar</td><td class="DataGridItemCosts" align="center">¤ 56.50<br />(erm. ¤ 32.50)</td>
+	</tr><tr class="DataGridPager" align="right">
+		<td class="DataGridPager" align="center" colspan="9" style="border-width:0px;border-style:None;"><table cellspacing="0" cellpadding="1" style="border-width:0px;border-style:None;border-collapse:collapse;">
+			<tr style="border-width:0px;">
+				<td class="DataGridPager"><input type="image" name="ctl00$Content$ILDataGrid1$ctl14$ctl01" class="DataGridPager" src="../Design/Pictures/grid/arrow_leftend.svg" align="absmiddle" /></td><td class="DataGridPager"><input type="image" name="ctl00$Content$ILDataGrid1$ctl14$ctl02" class="DataGridPager" src="../Design/Pictures/grid/arrow_left.svg" align="absmiddle" /></td><td class="DataGridPager"><span class="DataGridPager">Seite 2 von 32</span></td><td class="DataGridPager"><input type="image" name="ctl00$Content$ILDataGrid1$ctl14$ctl04" class="DataGridPager" src="../Design/Pictures/grid/arrow_right.svg" align="absmiddle" /></td><td class="DataGridPager"><input type="image" name="ctl00$Content$ILDataGrid1$ctl14$ctl05" class="DataGridPager" src="../Design/Pictures/grid/arrow_rightend.svg" align="absmiddle" /></td>
+			</tr>
+		</table></td>
+	</tr>
+</table>
+    <br />
+    &nbsp;
+    <br />
+    <!-- Schaltfl?chen -->
+    <div style="clear: both; float: none">
+        <input type="submit" name="ctl00$Content$btnCourseSearchBottom" value="Kurssuche ändern" id="ctl00_Content_btnCourseSearchBottom" tabindex="3" class="ButtonLarge" />
+        &nbsp; &nbsp;
+        <input type="submit" name="ctl00$Content$btnPDFBottom" value="Trefferliste als PDF" id="ctl00_Content_btnPDFBottom" class="ButtonLarge" />
+    </div>
+
+    <!-- Hinweise -->
+    <br />
+    <div id="ctl00_Content_divHeader">
+        <div>
+            <div class="titel">
+                <span id="ctl00_Content_lblHinweis">Hinweise: </span>
+            </div>
+        </div>
+        <ol>
+            <li>
+                <p>
+                    <span id="ctl00_Content_lblHinweisText">Wenn Sie auf einen Kurstitel klicken, erhalten Sie weitere <span style="font-weight:bold">Details</span> zum jeweiligen Kurs angezeigt.</span>
+                </p>
+            </li>
+            <li>
+                <p>
+                    <span id="ctl00_Content_lblHinweisText2">Durch Klicken auf eine <span style="font-weight:bold">Spaltenüberschrift</span> können Sie die Sortierung der Liste ändern.</span>
+                </p>
+            </li>
+            <li>
+                <p>
+                    <span id="ctl00_Content_lblHinweisText3">Um sich bei einem belegten  Kurs in die <span style="color:black;font-weight:bold;">Warteliste</span> aufnehmen zu lassen, legen Sie ihn bitte in den Warenkorb und folgen den üblichen Buchungsschritten.</span>
+                </p>
+            </li>
+        </ol>
+    </div>
+
+    <!-- Verarbeitungsparameter -->
+    <div>
+        <span id="ctl00_Content_PVCCourseSearch"></span>
+        <span id="ctl00_Content_PVCSearchByID"></span>
+        <span id="ctl00_Content_PVCSearchByLyceumID"></span>
+        <span id="ctl00_Content_PVCSimpleSearch"></span>
+        <span id="ctl00_Content_PVCAdvancedSearch"></span>
+        <span id="ctl00_Content_PVCCourseNrSearch"></span>
+    </div>
+
+
+    <!-- Message Box Script "Buchungscode"-->
+    <div id="ctl00_Content_pnlBCode" class="modalPopup" style="display: none;">
+	
+        <div id="ctl00_Content_pnlBCHeader" style="cursor: move; background-color: #B7BABC;
+            border: solid 1px Gray; color: Black">
+		
+            <div>
+                <strong>
+                    <span id="ctl00_Content_lblBCodeTitel" class="modalPopup_title">xyzzzz</span>
+                </strong>
+            </div>
+        
+	</div>
+        <div id="Div1">
+            <p>
+                <span id="ctl00_Content_lblBCodeMessage">cczzyyyy</span>
+            </p>
+            <br />
+            <p style="text-align: center;">
+                <input name="ctl00$Content$txtEntry" type="text" id="ctl00_Content_txtEntry" style="border-style:Solid;width:90%;" />
+            </p>
+            <br />
+            <p style="text-align: center;">
+                <input type="submit" name="ctl00$Content$btnAdd2Cart" value="Zum Warenkorb hinzuf?gen" id="ctl00_Content_btnAdd2Cart" style="width:60%;" />
+                <br />
+                <br />
+                <input type="submit" name="ctl00$Content$btnReturn1" value="Zur?ck zur Kursliste" id="ctl00_Content_btnReturn1" style="width:60%;" />
+            </p>
+        </div>
+    
+</div>
+    
+
+
+    <!-- Message Box Script "falscher Buchungscode"-->
+    <div id="ctl00_Content_pnlBCWrong" class="modalPopup" style="display: none;">
+	
+        <div id="ctl00_Content_pnlBCWHeader" style="cursor: move; background-color: #B7BABC;
+            border: solid 1px Gray; color: Black">
+		
+            <div>
+                <strong>
+                    <span id="ctl00_Content_lblBCWrongTitle" class="modalPopup_title">xyzzzz</span>
+                </strong>
+            </div>
+        
+	</div>
+        <div id="msgBCWContent">
+            <br />
+            <p>
+                <span id="ctl00_Content_lblBCWrongText">cczzyyyy</span>
+            </p>
+            <br />
+            <p style="text-align: center;">
+                <input type="submit" name="ctl00$Content$btnReturn2" value="Zur?ck zur Kursliste" id="ctl00_Content_btnReturn2" style="width:50%;" />
+                <br />
+            </p>
+        </div>
+    
+</div>
+    
+    <div style="display: none">
+        <a id="ctl00_Content_btnDummy" href="javascript:__doPostBack(&#39;ctl00$Content$btnDummy&#39;,&#39;&#39;)">Dummy Button</a>
+    </div>
+
+                        <!-- Content end -->
+                    </div>
+                </div>
+                <!-- Ende Hauptnavigation -->
+            </div>
+        </div>
+        <!-- Ende bobody -->
+    
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="03F8BC54" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/wEdADUTAQAeIkR+dyTmLFXXNCC6ZvTfp2caT+tS7i8IwTIP2TUOLCIIrfJ89vgWUN9kr0GZD7vwNc3A6/J9m3BnSotJn39K2R32x1NqHNU0BHlyFhFBfGdZrl08wvqlYx5MkjqMR/C9IdsqwsRbshH9wxoiuuKFK1iTgiFBKjlwHWyYxMH6oQUJlKWgLiRZ1wuwzQnrkgyaCS9kGuSRgnvDq0F2lrymjHOgtN0eAmYyHdoNDZSFTnHLEGTfWUXm5D/UuBZirZ+orH7JdNCr8e0DMd6MoXyk7bQtdRjTvr5OvRP61OT7Pdwfds8yxLvVeh+EjlkzsBaB7uiqWyIGwk0UOT0K2+aPfDbkPLfhib1823u6wZlWiy6wziM/6gjkDz0Q55+yhznP1jgvkq3GHh4ZBWM8xVI7a8PRV/t2GvS3fSzzRlccX7x4AplUd9uxuwMB2dhYoFJgDc3z01FylablNDkfeFn6yrvnDMkegtsi2Nmv+5R7nk7sLOqcQ3RLuRoqOD6T9q9o4T5Y1gMeTztDPTJng+TUxWz9U69p1r1MecDMadw189aT0C6JflLAxho2mW+Im2k21VPAjYqmTUWOCTKyBIpJsIdcShcJSDx7DAbfYhWA1JRJpo4UFTyNAT/3GnMYOC6Fr11giyMAASJmZr7y1oIByGpzgVYDtNcZ54+HQPDt4k+Zvd/CUeRY/S4MXgczoDc2y+zaFyOCv6P+Xg9tRWFWl16P5oNQLfYt4A1geIFb11ht5mGNycy0eNCxZD8x4SrkU7ZjoObnl+GVs4t4OF+QMsfubEkvLXVT48jd2wV5lk+wV0Bt++PpeSPqdZVagBW4eH7cPAnJINp1tfSttxZBwg9g4w8Szp328qGU8be0rDhEWxTxWC9cVwg/guhae7lGUauChOxC6xQqv+QqiwGm8+qM+He+f3cGNDq0+cvveiwmS/RYZTa299p+bQvd3StUBblNeSAAt/PC1dOTxz4rHNwaUS6TXRvQOLVlD2jdo4Q4wwfEjQeoIVVDRmZq1N6lfbLNg9X/G2Sbr7xpKVJhFfccCtdCzl7LO1LFxj8J/2CBKyliwVC8rPRmuwEYz1Tq78EfQALeHNsNV6dcZ2LdOubZ3PUVyAOuKt/QYvBKrKnDorcx+t6DZZaWZxroY9xR2vTIZ/vXq94GPVjO" />
+</div>
+<script type="text/javascript">
+Sys.Application.add_load(modalSetup);
+function modalSetup() {
+var modalPopup = $find('pbc');
+modalPopup.add_shown(SetFocusOnControl); }
+function SetFocusOnControl() {
+var textBox1 = $get('ctl00_Content_txtEntry');
+textBox1.focus();}
+</script>
+
+<script type="text/javascript">
+//<![CDATA[
+Sys.Extended.UI.Localization.SetLocale("de");Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.ModalPopupBehavior, {"backgroundCssClass":"modalBackground","dropShadow":true,"dynamicServicePath":"/VHSKURSE/BusinessPages/CourseList.aspx","id":"pbc","okControlID":"ctl00_Content_lblBCodeMessage","popupControlID":"ctl00_Content_pnlBCode"}, null, null, $get("ctl00_Content_btnDummy"));
+});
+Sys.Application.add_init(function() {
+    $create(Sys.Extended.UI.ModalPopupBehavior, {"backgroundCssClass":"modalBackground","dropShadow":true,"dynamicServicePath":"/VHSKURSE/BusinessPages/CourseList.aspx","id":"pcw","okControlID":"ctl00_Content_lblBCWrongText","popupControlID":"ctl00_Content_pnlBCWrong"}, null, null, $get("ctl00_Content_btnDummy"));
+});
+//]]>
+</script>
+</form>
+
+    <!-- Weiterleitung auf Timeout-Seite nach 30 Minuten-->
+    <script type="text/javascript">
+        setTimeout(function(){
+		window.location = '/VHSKURSE/BusinessPages/TimeOutMessage.aspx';
+		}, 1770000);
+
+		//< !--20250813    MParzich    Folgeabschnitt mit crazyegg deaktiviert-- >
+	//setTimeout(function(){var a=document.createElement("script");
+	//var b=document.getElementsByTagName("script")[0];
+	//a.src=document.location.protocol+"//script.crazyegg.com/pages/scripts/0004/4106.js<http://script.crazyegg.com/pages/scripts/0004/4106.js><http://script.crazyegg.com/pages/scripts/0004/4106.js>?"+Math.floor(new
+	//Date().getTime()/3600000);
+	//a.async=true;a.type="text/javascript";b.parentNode.insertBefore(a,b)},
+	//1);
+
+    </script>
+
+
+            <!--20250815    MParzich    Barrierefreiheit hinzugef?gt, Links aktualisiert-->
+
+            <div id="bo_footer">
+                <ul class="horizontal blocklinks">
+                    <li class="mobile_hide"><a href="#print" onclick="window.print();return false;">Druckversion</a></li>
+                    <li><a href="https://www.berlin.de/vhs/service/geschaeftsbedingungen/">AGB</a></li>
+                    <li><a href="../vhs_texte/Datenschutz.aspx">Datenschutz</a></li>
+                    <li><a href="../vhs_texte/Barrierefreiheit.aspx">Erklärung zur Barrierefreiheit</a></li>
+                    <li class="last"><a href="#"><span class="sprite_bde">&#8593;</span> Seitenanfang</a></li>
+                </ul>
+            </div>
+        </div>
+        <!--
+        <div class="partner">
+            <ul class="teaser horizontal"><li>Partnersites:</li><li><a target="_blank" href="https://www.berlinonline.de/">BerlinOnline</a></li><li><a target="_blank" href="https://www.berliner.de/">Berliner.de</a></li><li><a target="_blank" href="https://www.berliner-zeitung.de/">Berliner Zeitung</a></li><li><a target="_blank" href="https://www.berliner-kurier.de/">Berliner Kurier</a></li><li><a target="_blank" href="https://www.b2b-deutschland.de/berlin/">B2B Deutschland</a></li><li><a target="_blank" href="https://www.deutschland-reise.de/">Deutschland-Reise</a></li></ul><ul class="teaser horizontal"><li>Weitere Metropol-Webseiten:</li><li><a target="_blank" href="https://www.hamburg.de/">Hamburg</a></li><li><a target="_blank" href="https://www.muenchen.de/">M&uuml;nchen</a></li><li><a target="_blank" href="https://www.koeln.de/">K&ouml;ln</a></li></ul>
+        </div>
+    -->
+    </div>
+
+    <div class="skyscraper">
+        <!-- berlin.de_ber_sdm/beberlin -->
+        <script type="text/javascript">
+            var ord = window.ord || Math.floor(Math.random() * 1e16);
+            //< !--20250813    MParzich    Folgeabschnitt mit ad.doubleclick deaktiviert-- >
+            /*document.write('<script type="text/javascript" src="https://ad.doubleclick.net/N7458/adj/berlin.de_ber_sdm/beberlin;sz=120x600,160x600,200x600,300x600;ord=' + ord + '?"><\/script>');*/
+        </script>
+        <!--20250814    MParzich    Folgeabschnitt mit beberlin deaktiviert-->
+        <!--<script type="text/javascript" src="https://www.vhsit.berlin.de/VHSKURSE/Design/bde_2024/land-Dateien/beberlin"></script>--><!-- (w) BxH: 120x600,160x600,200x600,300x600  F: 112147497  A: 56112025497   S: j -->
+        <script type="text/javascript">
+            try { if (typeof (window.top.sdm_ift) == "undefined") top.window.sdm_ift = ""; top.window.sdm_ift += "<br>D120x600,160x600,200x600,300x600 | 112147497 | 56112025497"; } catch (err) { }
+        </script>
+        <style>
+            .banner_placeholder, .banner {
+                display: none;
+                height: 0px !important;
+            }
+        </style>
+
+        <!--20250813    MParzich    Folgeabschnitt mit ad.doubleclick deaktiviert -->
+        <!--<noscript>
+        <a href="https://ad.doubleclick.net/N7458/jump/berlin.de_ber_sdm/beberlin;sz=120x600;ord=[timestamp]?"><img src="https://ad.doubleclick.net/N7458/ad/berlin.de_ber_sdm/beberlin;sz=120x600;ord=[timestamp]?" width="120" height="600"/></a>
+        </noscript>-->
+    </div>
+
+    <!-- locale='' lang='de' -->
+    <!-- REQUEST_URI='/template/land//__ml/bde_2010_old_land_abs/foot.inc' HOST='(none)' HHOST='www.berlin.de' HOSTNAME='(none)' -->
+    <!--20250814    MParzich    Folgeabschnitt mit crazyegg deaktiviert -->
+    <!-- crazyegg -->
+    <!--<script type="text/javascript">
+        setTimeout(function () {
+            var a = document.createElement("script");
+            var b = document.getElementsByTagName("script")[0];
+            a.src = document.location.protocol + "//script.crazyegg.com/pages/scripts/0004/4106.js?" + Math.floor(new Date().getTime() / 3600000);
+            a.async = true; a.type = "text/javascript"; b.parentNode.insertBefore(a, b)
+        }, 1);
+    </script>-->
+    <!-- /crazyegg -->
+    <!-- T:24/Apr/2015:08:31:43
+    S:ap_get_local_host() H:www.berlin.de R:/template/land/ -->
+
+</body>
+</html>

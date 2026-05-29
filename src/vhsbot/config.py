@@ -27,11 +27,10 @@ class Settings:
         "(+https://github.com/rubenkarlsson/vhs-berlin-bot, "
         "contact: neburgordon@gmail.com)"
     )
-    search_url: str = (
-        "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseSearch.aspx"
-    )
+    search_url: str = "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseSearch.aspx"
+    results_url: str = "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseList.aspx"
     detail_url_template: str = (
-        "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseDetails.aspx?Kurs-ID={kurs_id}"
+        "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseDetail.aspx?id={kurs_id}"
     )
 
 
