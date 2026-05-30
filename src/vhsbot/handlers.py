@@ -1,23 +1,38 @@
-"""Telegram handlers, whitelist middleware, and onboarding conversation.
+"""Telegram handlers, whitelist enforcement, and onboarding conversation.
 
-Every handler runs the whitelist check first (see :func:`whitelist_only`)
-and wraps its body in a try/except that logs with ``logger.exception``
-and surfaces a generic apology to the user — Telegram never sees a stack
-trace.
+Access control is **structural**: the whitelist is applied as a
+``filters.User`` instance on every ``CommandHandler`` / ``MessageHandler``
+registration (see :func:`register_handlers`). PTB silently drops updates
+that don't match — which is intentional per the security review's
+"neutral rejection is stealthier" recommendation. The only handler the
+structural filter cannot reach is the ``CallbackQueryHandler`` for the
+district keyboard; that one is wrapped in :func:`_whitelist_callback`.
+
+Exceptions raised by any handler propagate to the global error handler
+(:func:`global_error_handler`), which logs with ``logger.exception`` and
+sends a generic apology to the user. Handlers themselves contain no
+try/except for "unknown failure".
+
+DB access goes through :func:`_locked_db`, an async context manager that
+acquires the shared ``asyncio.Lock`` before yielding the sqlite
+connection. Every site that touches ``conn`` runs inside that lock — the
+Phase 1 plan promised this serialisation and Phase 4 wires it up.
 
 The on-demand backfill on ``/watch`` blocks the handler (option A from
 the Phase 4 spec): we await ``scraper.crawl`` for the user's districts
 and send at most 15 bookable matches as individual messages, one per
-course. The user sees a typing indicator for up to a minute. This is
-fine for a single-user bot. See ``main.py`` docstring for the rationale
-and Phase 5 deferral notes.
+course. The scrape itself runs outside the DB lock (it does no SQL); the
+subscription insert and the per-message ``record_notification`` calls
+run inside. If the crawl raises, the subscription is already saved, so
+we tell the user the backfill was interrupted and let them re-trigger.
 """
 
 from __future__ import annotations
 
 import logging
 import sqlite3
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from functools import wraps
 from typing import Any
 
@@ -36,14 +51,15 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.helpers import escape_markdown
 
 from vhsbot import scraper
+from vhsbot._app_state import BD_CLIENT, BD_DB, BD_DB_LOCK, BD_SETTINGS
 from vhsbot.config import Settings
 from vhsbot.db import (
     BOOKABLE_AVAILABILITY,
     CourseSnapshot,
     add_subscription,
-    all_active_user_ids,  # noqa: F401  (re-exported for Phase 5)
     get_user_settings,
     list_subscriptions,
     record_notification,
@@ -64,11 +80,6 @@ STATE_PICK_KEYWORD = 2
 # deferred to Phase 5 (the daily-scan code path); see tasks/todo .md.
 BACKFILL_CAP = 15
 
-# bot_data keys
-_BD_SETTINGS = "settings"
-_BD_DB = "db"
-_BD_CLIENT = "http_client"
-
 # user_data keys (per-user state inside the onboarding ConversationHandler)
 _UD_DISTRICT_MAP = "district_map"  # dict[int, int]
 _UD_SELECTED_DISTRICTS = "selected_districts"  # set[int]
@@ -79,22 +90,16 @@ _UD_SELECTED_DISTRICTS = "selected_districts"  # set[int]
 # ---------------------------------------------------------------------------
 
 
-_MD2_RESERVED = r"_*[]()~`>#+-=|{}.!\\"
-
-
 def escape_markdown_v2(s: str) -> str:
     """Escape every Telegram Markdown V2 reserved character in ``s``.
 
-    Reserved set (from the Bot API docs):
-    ``_ * [ ] ( ) ~ backtick > # + - = | { } . !`` plus backslash.
-    Each occurrence is prefixed with ``\\``.
+    Thin wrapper around PTB's ``telegram.helpers.escape_markdown`` so we
+    track upstream behaviour (e.g. if Telegram adds a new reserved char,
+    PTB will roll it in). PTB's helper also escapes backslash, which is
+    correct: a raw ``\\X`` in the message body would otherwise be parsed
+    by Telegram as a deliberate escape of ``X``.
     """
-    out: list[str] = []
-    for ch in s:
-        if ch in _MD2_RESERVED:
-            out.append("\\")
-        out.append(ch)
-    return "".join(out)
+    return escape_markdown(s, version=2)
 
 
 def build_help_text() -> str:
@@ -110,7 +115,8 @@ def build_help_text() -> str:
         "/districts — re-pick your districts",
         "/pause — mute daily notifications",
         "/resume — un-mute daily notifications",
-        "/scan — trigger a manual scan (admin only)",
+        # TODO(Phase 5): once a real admin gate exists, re-add "(admin only)".
+        "/scan — trigger a manual scan",
     ]
     return escape_markdown_v2("\n".join(lines))
 
@@ -186,51 +192,62 @@ def build_district_keyboard(
 
 
 # ---------------------------------------------------------------------------
-# Whitelist middleware
+# Whitelist enforcement (callbacks only — slash/message handlers use
+# ``filters.User`` configured in :func:`register_handlers`).
 # ---------------------------------------------------------------------------
 
 
 _HandlerFn = Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[Any]]
 
 
-def whitelist_only(fn: _HandlerFn) -> _HandlerFn:
-    """Reject updates whose effective_user.id is not whitelisted.
+def _whitelist_callback(fn: _HandlerFn) -> _HandlerFn:
+    """Reject non-whitelisted users hitting a ``CallbackQueryHandler``.
 
-    The decorator answers with a polite rejection message and returns
-    ``ConversationHandler.END`` so it is also safe as an entry point of
-    the onboarding conversation. Every handler in this module is wrapped
-    with this decorator AND has an outer try/except that maps any
-    exception to a generic apology.
+    ``CallbackQueryHandler`` does not accept a ``filters=`` kwarg in
+    PTB v22, so structural enforcement is not available. This decorator
+    answers the inline callback with a neutral "Not authorised." alert
+    and returns ``ConversationHandler.END`` so the conversation, if one
+    is active, exits cleanly. Exceptions propagate to the global error
+    handler.
     """
 
     @wraps(fn)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Any:
-        settings: Settings = context.bot_data[_BD_SETTINGS]
+        settings: Settings = context.bot_data[BD_SETTINGS]
         user = update.effective_user
         if user is None or user.id not in settings.allowed_user_ids:
             logger.info(
-                "rejecting update from non-whitelisted user_id=%s",
+                "rejecting callback from non-whitelisted user_id=%s",
                 user.id if user else None,
             )
-            if update.message is not None:
-                await update.message.reply_text(
-                    "Sorry, this is a private bot. Access is restricted."
-                )
+            if update.callback_query is not None:
+                await update.callback_query.answer("Not authorised.", show_alert=True)
             return ConversationHandler.END
-        try:
-            return await fn(update, context)
-        except Exception:
-            logger.exception("handler %s raised", fn.__name__)
-            if update.message is not None:
-                try:
-                    await update.message.reply_text(
-                        "Something went wrong on my side. Please try again."
-                    )
-                except Exception:  # pragma: no cover  (best-effort apology)
-                    logger.exception("failed to send fallback apology message")
-            return ConversationHandler.END
+        return await fn(update, context)
 
     return wrapper
+
+
+# ---------------------------------------------------------------------------
+# Global error handler
+# ---------------------------------------------------------------------------
+
+
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Single sink for every unhandled exception in a handler/job.
+
+    Logs the exception with full traceback and (best-effort) sends a
+    generic apology to the user. Never raises.
+    """
+    logger.exception("unhandled handler error: update=%r", update, exc_info=context.error)
+    if isinstance(update, Update) and update.effective_chat is not None:
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="Something went wrong; please try again.",
+            )
+        except Exception:  # pragma: no cover  (best-effort apology)
+            logger.exception("failed to send fallback apology message")
 
 
 # ---------------------------------------------------------------------------
@@ -239,25 +256,60 @@ def whitelist_only(fn: _HandlerFn) -> _HandlerFn:
 
 
 def _settings(context: ContextTypes.DEFAULT_TYPE) -> Settings:
-    return context.bot_data[_BD_SETTINGS]
-
-
-def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
-    return context.bot_data[_BD_DB]
+    return context.bot_data[BD_SETTINGS]
 
 
 def _client(context: ContextTypes.DEFAULT_TYPE) -> httpx.AsyncClient:
-    return context.bot_data[_BD_CLIENT]
+    return context.bot_data[BD_CLIENT]
+
+
+@asynccontextmanager
+async def _locked_db(
+    context: ContextTypes.DEFAULT_TYPE,
+) -> AsyncIterator[sqlite3.Connection]:
+    """Acquire the shared DB lock and yield the connection.
+
+    Every site in this module that touches sqlite goes through this
+    helper. The lock is shallow — it does NOT cover the time spent
+    awaiting the network in ``_run_backfill`` — but it does serialise
+    the writes themselves, which is what the Phase 1 plan promised.
+    """
+    lock = context.bot_data[BD_DB_LOCK]
+    async with lock:
+        yield context.bot_data[BD_DB]
 
 
 async def _fetch_district_map(client: httpx.AsyncClient, settings: Settings) -> dict[int, int]:
     """Fetch the search form and parse its district checkbox map.
 
-    Pulled out as a thin helper so tests can monkeypatch it without
-    touching the network.
+    Wraps the GET in try/except + ``raise_for_status`` so the caller can
+    distinguish "site down" from "we have a bug" and surface a more
+    informative message to the user.
     """
-    resp = await client.get(settings.search_url)
+    try:
+        resp = await client.get(settings.search_url)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        logger.warning("district-map fetch failed: %s", e)
+        raise
     return parse_district_map(resp.content)
+
+
+async def _safe_fetch_district_map(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> dict[int, int] | None:
+    """Wrapper around :func:`_fetch_district_map` that surfaces a friendly
+    "site down" message and returns ``None`` instead of bubbling up the
+    network error. Callers branch on ``None`` to short-circuit cleanly.
+    """
+    try:
+        return await _fetch_district_map(_client(context), _settings(context))
+    except httpx.HTTPError:
+        if update.message is not None:
+            await update.message.reply_text(
+                "VHS Berlin appears to be down — please try again in a moment."
+            )
+        return None
 
 
 async def _run_backfill(
@@ -271,25 +323,39 @@ async def _run_backfill(
 
     Returns the number of messages actually sent. Each send is logged in
     ``notification_log`` with reason ``"backfill"``.
+
+    If ``scraper.crawl`` raises partway through the user has already had
+    the subscription persisted (the caller does that before invoking us),
+    so we just tell them the backfill was interrupted and return whatever
+    count we got to. We do NOT roll the subscription back — the user
+    explicitly asked to watch this keyword.
     """
     settings = _settings(context)
-    conn = _conn(context)
     client = _client(context)
 
-    user_settings = get_user_settings(conn, user_id=user_id)
+    async with _locked_db(context) as conn:
+        user_settings = get_user_settings(conn, user_id=user_id)
     if user_settings is None:
         return 0
 
     if update.message is not None:
         await update.message.reply_text(f"Backfill für {keyword!r} läuft (kann ~30-60s dauern)...")
 
-    snapshots = await scraper.crawl(
-        client=client,
-        district_ids=sorted(user_settings.districts),
-        sleep_seconds=settings.scrape_sleep_seconds,
-    )
-
     sent = 0
+    try:
+        snapshots = await scraper.crawl(
+            client=client,
+            district_ids=sorted(user_settings.districts),
+            sleep_seconds=settings.scrape_sleep_seconds,
+        )
+    except Exception:
+        logger.exception("backfill failed for user=%s keyword=%r", user_id, keyword)
+        if update.message is not None:
+            await update.message.reply_text(
+                f"Backfill interrupted after {sent} matches; the keyword is saved."
+            )
+        return sent
+
     for snap in snapshots:
         if sent >= BACKFILL_CAP:
             break
@@ -306,7 +372,8 @@ async def _run_backfill(
             parse_mode="MarkdownV2",
             reply_markup=markup,
         )
-        record_notification(conn, user_id=user_id, kurs_id=snap.kurs_id, reason="backfill")
+        async with _locked_db(context) as conn:
+            record_notification(conn, user_id=user_id, kurs_id=snap.kurs_id, reason="backfill")
         sent += 1
 
     if update.message is not None:
@@ -319,15 +386,15 @@ async def _run_backfill(
 # ---------------------------------------------------------------------------
 
 
-@whitelist_only
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
-    assert user is not None  # whitelist_only guarantees this
-    conn = _conn(context)
+    assert user is not None  # filter guarantees this
 
-    existing = get_user_settings(conn, user_id=user.id)
+    async with _locked_db(context) as conn:
+        existing = get_user_settings(conn, user_id=user.id)
+        subs = list_subscriptions(conn, user_id=user.id) if existing is not None else []
+
     if existing is not None:
-        subs = list_subscriptions(conn, user_id=user.id)
         text = build_list_text(
             keywords=subs,
             districts=sorted(existing.districts),
@@ -342,9 +409,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     # New user: kick off the onboarding conversation.
-    client = _client(context)
-    settings = _settings(context)
-    district_map = await _fetch_district_map(client, settings)
+    district_map = await _safe_fetch_district_map(update, context)
+    if district_map is None:
+        return ConversationHandler.END
     context.user_data[_UD_DISTRICT_MAP] = district_map
     context.user_data[_UD_SELECTED_DISTRICTS] = set()
 
@@ -356,23 +423,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return STATE_PICK_DISTRICTS
 
 
-@whitelist_only
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     assert update.message is not None
     await update.message.reply_text(build_help_text(), parse_mode="MarkdownV2")
 
 
-@whitelist_only
 async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     assert user is not None
-    conn = _conn(context)
-    settings = get_user_settings(conn, user_id=user.id)
-    if settings is None:
-        assert update.message is not None
-        await update.message.reply_text("You have not finished onboarding yet. Send /start first.")
-        return
-    subs = list_subscriptions(conn, user_id=user.id)
+    async with _locked_db(context) as conn:
+        settings = get_user_settings(conn, user_id=user.id)
+        if settings is None:
+            assert update.message is not None
+            await update.message.reply_text(
+                "You have not finished onboarding yet. Send /start first."
+            )
+            return
+        subs = list_subscriptions(conn, user_id=user.id)
     text = build_list_text(
         keywords=subs,
         districts=sorted(settings.districts),
@@ -382,7 +449,6 @@ async def list_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(text, parse_mode="MarkdownV2")
 
 
-@whitelist_only
 async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     assert user is not None
@@ -395,17 +461,17 @@ async def watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Usage: /watch <keyword>")
         return
 
-    conn = _conn(context)
-    if get_user_settings(conn, user_id=user.id) is None:
-        await update.message.reply_text("You have not finished onboarding yet. Send /start first.")
-        return
-
-    add_subscription(conn, user_id=user.id, keyword=keyword)
+    async with _locked_db(context) as conn:
+        if get_user_settings(conn, user_id=user.id) is None:
+            await update.message.reply_text(
+                "You have not finished onboarding yet. Send /start first."
+            )
+            return
+        add_subscription(conn, user_id=user.id, keyword=keyword)
     await update.message.reply_text(f"Watching {keyword!r}.")
     await _run_backfill(update=update, context=context, user_id=user.id, keyword=keyword)
 
 
-@whitelist_only
 async def unwatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     assert user is not None
@@ -414,25 +480,24 @@ async def unwatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Usage: /unwatch <keyword>")
         return
     keyword = " ".join(context.args).strip()
-    conn = _conn(context)
-    removed = remove_subscription(conn, user_id=user.id, keyword=keyword)
+    async with _locked_db(context) as conn:
+        removed = remove_subscription(conn, user_id=user.id, keyword=keyword)
     if removed:
         await update.message.reply_text(f"Stopped watching {keyword!r}.")
     else:
         await update.message.reply_text(f"Was not watching {keyword!r}.")
 
 
-@whitelist_only
 async def districts_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    client = _client(context)
-    settings = _settings(context)
-    district_map = await _fetch_district_map(client, settings)
+    district_map = await _safe_fetch_district_map(update, context)
+    if district_map is None:
+        return ConversationHandler.END
     context.user_data[_UD_DISTRICT_MAP] = district_map
     # Pre-seed selection with the user's current districts.
     user = update.effective_user
     assert user is not None
-    conn = _conn(context)
-    existing = get_user_settings(conn, user_id=user.id)
+    async with _locked_db(context) as conn:
+        existing = get_user_settings(conn, user_id=user.id)
     selected = set(existing.districts) if existing else set()
     context.user_data[_UD_SELECTED_DISTRICTS] = selected
 
@@ -444,35 +509,32 @@ async def districts_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return STATE_PICK_DISTRICTS
 
 
-@whitelist_only
 async def pause(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     assert user is not None
-    conn = _conn(context)
-    if get_user_settings(conn, user_id=user.id) is None:
-        assert update.message is not None
-        await update.message.reply_text("Run /start first.")
-        return
-    set_paused(conn, user_id=user.id, paused=True)
+    async with _locked_db(context) as conn:
+        if get_user_settings(conn, user_id=user.id) is None:
+            assert update.message is not None
+            await update.message.reply_text("Run /start first.")
+            return
+        set_paused(conn, user_id=user.id, paused=True)
     assert update.message is not None
     await update.message.reply_text("Notifications paused. Use /resume to un-pause.")
 
 
-@whitelist_only
 async def resume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     assert user is not None
-    conn = _conn(context)
-    if get_user_settings(conn, user_id=user.id) is None:
-        assert update.message is not None
-        await update.message.reply_text("Run /start first.")
-        return
-    set_paused(conn, user_id=user.id, paused=False)
+    async with _locked_db(context) as conn:
+        if get_user_settings(conn, user_id=user.id) is None:
+            assert update.message is not None
+            await update.message.reply_text("Run /start first.")
+            return
+        set_paused(conn, user_id=user.id, paused=False)
     assert update.message is not None
     await update.message.reply_text("Notifications resumed.")
 
 
-@whitelist_only
 async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # TODO(Phase 5): wire this to jobs.daily_scan(context) — currently the
     # daily-scan job does not exist yet, so /scan is a stubbed trigger that
@@ -491,27 +553,30 @@ async def on_district_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Handle a tap on the district keyboard."""
     query = update.callback_query
     assert query is not None
-    await query.answer()
 
     district_map: dict[int, int] = context.user_data.get(_UD_DISTRICT_MAP, {})
     selected: set[int] = context.user_data.get(_UD_SELECTED_DISTRICTS, set())
 
     data = query.data or ""
     if data == "all":
+        await query.answer()
         selected = set(district_map.keys())
     elif data == "done":
         if not selected:
+            # Single answer per branch: the alert IS the answer.
             await query.answer("Pick at least one district first.", show_alert=True)
             return STATE_PICK_DISTRICTS
+        await query.answer()
         user = update.effective_user
         assert user is not None
-        conn = _conn(context)
-        upsert_user_settings(conn, user_id=user.id, districts=selected)
+        async with _locked_db(context) as conn:
+            upsert_user_settings(conn, user_id=user.id, districts=selected)
         await query.edit_message_text(
             f"Districts saved: {sorted(selected)}. Now send me a keyword to watch (e.g. 'Yoga')."
         )
         return STATE_PICK_KEYWORD
     elif data.startswith("toggle:"):
+        await query.answer()
         try:
             district_id = int(data.split(":", 1)[1])
         except ValueError:
@@ -520,6 +585,9 @@ async def on_district_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE)
             selected.discard(district_id)
         else:
             selected.add(district_id)
+    else:
+        await query.answer()
+
     context.user_data[_UD_SELECTED_DISTRICTS] = selected
     await query.edit_message_reply_markup(
         reply_markup=build_district_keyboard(district_map, selected=selected)
@@ -537,16 +605,40 @@ async def on_keyword_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("Please send a non-empty keyword.")
         return STATE_PICK_KEYWORD
 
-    conn = _conn(context)
-    add_subscription(conn, user_id=user.id, keyword=keyword)
+    async with _locked_db(context) as conn:
+        add_subscription(conn, user_id=user.id, keyword=keyword)
     await update.message.reply_text(f"Watching {keyword!r}.")
     await _run_backfill(update=update, context=context, user_id=user.id, keyword=keyword)
     return ConversationHandler.END
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """``/cancel`` handler — explicit user exit from the conversation.
+
+    Wipes the transient onboarding state (district map + selection) so a
+    later ``/start`` begins fresh.
+    """
+    context.user_data.pop(_UD_DISTRICT_MAP, None)
+    context.user_data.pop(_UD_SELECTED_DISTRICTS, None)
     if update.message is not None:
         await update.message.reply_text("Cancelled.")
+    return ConversationHandler.END
+
+
+async def conversation_interrupt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Catch-all slash-command fallback inside the keyword state.
+
+    If the user sends ANY slash command while we're waiting for a
+    keyword, exit the conversation cleanly with a clear message. Their
+    saved districts (if persisted at the Fertig step) remain — only the
+    pending-keyword state is dropped.
+    """
+    context.user_data.pop(_UD_DISTRICT_MAP, None)
+    context.user_data.pop(_UD_SELECTED_DISTRICTS, None)
+    if update.message is not None:
+        await update.message.reply_text(
+            "Onboarding cancelled. Use the command again or /start fresh."
+        )
     return ConversationHandler.END
 
 
@@ -556,26 +648,54 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 def register_handlers(application: Application) -> None:
-    """Attach every handler to ``application``. Called from main.py."""
+    """Attach every handler to ``application``. Called from main.py.
+
+    Access control is structural: the ``filters.User`` instance below is
+    the whitelist. Non-whitelisted updates are silently ignored by PTB —
+    the bot looks "off" to outsiders, which is the desired stance.
+    """
+    settings: Settings = application.bot_data[BD_SETTINGS]
+    whitelist = filters.User(user_id=list(settings.allowed_user_ids))
+
     conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+        entry_points=[CommandHandler("start", start, filters=whitelist)],
         states={
             STATE_PICK_DISTRICTS: [
-                CallbackQueryHandler(on_district_toggle, pattern=r"^(toggle:\d+|all|done)$")
+                CallbackQueryHandler(
+                    _whitelist_callback(on_district_toggle),
+                    pattern=r"^(toggle:\d+|all|done)$",
+                )
             ],
             STATE_PICK_KEYWORD: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, on_keyword_message)
+                MessageHandler(
+                    whitelist & filters.TEXT & ~filters.COMMAND,
+                    on_keyword_message,
+                ),
+                # Any slash command while we're waiting for a keyword
+                # cleanly aborts the conversation.
+                MessageHandler(
+                    whitelist & filters.COMMAND,
+                    conversation_interrupt,
+                ),
             ],
         },
-        fallbacks=[CommandHandler("cancel", cancel)],
+        fallbacks=[
+            CommandHandler("cancel", cancel, filters=whitelist),
+            CommandHandler(
+                ["help", "list", "watch", "unwatch", "districts", "pause", "resume", "scan"],
+                conversation_interrupt,
+                filters=whitelist,
+            ),
+        ],
         per_message=False,
     )
     application.add_handler(conv)
-    application.add_handler(CommandHandler("help", help_cmd))
-    application.add_handler(CommandHandler("list", list_cmd))
-    application.add_handler(CommandHandler("watch", watch))
-    application.add_handler(CommandHandler("unwatch", unwatch))
-    application.add_handler(CommandHandler("districts", districts_cmd))
-    application.add_handler(CommandHandler("pause", pause))
-    application.add_handler(CommandHandler("resume", resume))
-    application.add_handler(CommandHandler("scan", scan))
+    application.add_handler(CommandHandler("help", help_cmd, filters=whitelist))
+    application.add_handler(CommandHandler("list", list_cmd, filters=whitelist))
+    application.add_handler(CommandHandler("watch", watch, filters=whitelist))
+    application.add_handler(CommandHandler("unwatch", unwatch, filters=whitelist))
+    application.add_handler(CommandHandler("districts", districts_cmd, filters=whitelist))
+    application.add_handler(CommandHandler("pause", pause, filters=whitelist))
+    application.add_handler(CommandHandler("resume", resume, filters=whitelist))
+    application.add_handler(CommandHandler("scan", scan, filters=whitelist))
+    application.add_error_handler(global_error_handler)

@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 authors = [{ name = "Ruben Karlsson", email = "neburgordon@gmail.com" }]
 license = { text = "MIT" }
 dependencies = [
-    "python-telegram-bot[job-queue]>=22.6,<23",
+    "python-telegram-bot[job-queue,rate-limiter]>=22.6,<23",
     "httpx>=0.27,<1",
     "beautifulsoup4>=4.12,<5",
     "lxml>=5.2,<6",
@@ -34,6 +34,11 @@ packages = ["src/vhsbot"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+filterwarnings = [
+    # We deliberately mix CallbackQueryHandler + per_message=False in the
+    # onboarding ConversationHandler — see handlers.register_handlers.
+    "ignore::telegram.warnings.PTBUserWarning",
+]
 
 [tool.ruff]
 line-length = 100
