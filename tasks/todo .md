@@ -114,13 +114,13 @@ The original recon in this section was partially wrong. The corrected flow below
 
 ### Phase 3 — matching + diff
 
-- [ ] `src/vhsbot/matching.py`:
-  - `fold(s: str) -> str` — Unicode NFKD + strip combining + casefold
-  - `matches(course: Course, keywords: list[str]) -> list[str]` — return all matched keywords (substring match against folded title + folded course_number)
-- [ ] `src/vhsbot/diff.py` (or inside jobs.py):
-  - `classify(course, prev_seen) -> "new" | "back_in_stock" | "unchanged" | "still_full"`
-  - "back_in_stock": prev availability was `"belegt"` AND current is one of `">2" | "2" | "1"`
-  - "new": kurs_id not in seen_courses
+- [x] `src/vhsbot/matching.py`:
+  - `fold(s: str) -> str` — Unicode NFKD + strip combining + casefold + whitespace collapse. Idempotent. 4 tests pin the umlaut/ß/whitespace/idempotence contract.
+  - `matches(course: CourseSnapshot, keywords: Iterable[str]) -> list[str]` — substring match against `fold(title) + " " + fold(course_number)`; skips empty keywords; dedups by folded form; preserves original casing in output. 9 tests.
+- [x] `src/vhsbot/diff.py`:
+  - `classify(current, previous) -> ClassifyResult` (`Literal["new", "back_in_stock", "unchanged", "still_full"]`, re-exported).
+  - "new" when previous is None; "back_in_stock" on belegt→{>2,2,1}; "still_full" on belegt→belegt; "unchanged" otherwise (incl. going-out-of-stock).
+  - Raises `ValueError` if `current.availability` is not one of the four parser literals. 18 tests (mostly parametrized).
 
 ### Phase 4 — handlers + onboarding
 
