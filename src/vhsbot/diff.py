@@ -12,6 +12,10 @@ from typing import Literal
 from vhsbot.db import AVAILABILITY_LITERALS, BOOKABLE_AVAILABILITY, CourseSnapshot, SeenCourse
 
 ClassifyResult = Literal["new", "back_in_stock", "unchanged", "still_full"]
+# Narrower literal containing only the two ``classify()`` outcomes that
+# actually drive a notification. Hoisted here so ``jobs.py`` can type the
+# fan-out cast without a private re-export.
+NotificationReason = Literal["new", "back_in_stock"]
 
 
 def classify(current: CourseSnapshot, previous: SeenCourse | None) -> ClassifyResult:

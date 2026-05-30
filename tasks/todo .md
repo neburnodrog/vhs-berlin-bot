@@ -7,14 +7,14 @@
 | User model | (A) **Single-user whitelist** — hardcoded `ALLOWED_USER_IDS` env var | Niche use case; simpler data model; no abuse vector |
 | Hosting | (A) **Hetzner via Coolify** (157.180.38.140) | Already owned, always-on, Docker-managed, free marginal cost |
 | Discovery strategy | (Y) **Full crawl + local filter**, scoped to user-chosen districts | One scrape answers many subscriptions; clean diff model |
-| Notification policy | **Strict + back-in-stock**: new+bookable OR full→bookable transitions; **backfill on `/watch`**; waitlist OFF by default | Catches cancellations (the high-value case) without spam |
-| Bot UX | (B) **Conversational onboarding** (`/start` → districts inline keyboard → keyword text), **slash commands** for management | Honors user's "asks the user" brief; warmer first contact |
+| Notification policy | **Strict + back-in-stock**: new+bookable OR full->bookable transitions; **backfill on `/watch`**; waitlist OFF by default | Catches cancellations (the high-value case) without spam |
+| Bot UX | (B) **Conversational onboarding** (`/start` -> districts inline keyboard -> keyword text), **slash commands** for management | Honors user's "asks the user" brief; warmer first contact |
 | Crawl scope | (B) **District-restricted**, user-defined; union all whitelist users' districts | Polite + relevant; first-class concept in VHS Berlin's own UI |
 | Matching | Free text, title + course-number prefix, **substring + case-insensitive + Unicode-folded**, OR across keywords, dedup across keywords | Matches user mental model; robust to German compound nouns |
 | Notification format | (A) **One message per course**, cap 15/day/user, Markdown V2 with inline "open detail page" button | Each course is independently actionable; cap prevents storms |
 | Tech stack | **Python 3.13**, **uv**, **ruff**, **pytest** + pytest-asyncio, **python-telegram-bot v22** with built-in `JobQueue` | Modern Python 2026 default; one library covers handlers + scheduling |
 | HTTP | **httpx async client** with session cookies; `User-Agent: vhs-berlin-bot/0.1 (+repo URL, contact: neburgordon@gmail.com)`; 2s sleep between paginated POSTs | Modern async, polite, honest |
-| Storage | **SQLite** at `/data/vhsbot.db` (mounted Coolify volume); raw snapshot to `/data/last_snapshot.json` for replay, pruned weekly | Boring, correct, zero ops |
+| Storage | **SQLite** at `/data/vhsbot.db` (mounted Coolify volume); raw HTML snapshots to `/data/snapshots/YYYY-MM-DD/<district>-page-<N>.html` (one file per result page per district per day), pruned after 7 days | Boring, correct, zero ops |
 | Repo | Private GitHub repo `vhs-berlin-bot` under personal account (neburgordon@gmail.com identity) | Personal-project boundary [[feedback-personal-email]] |
 
 ## Recon facts to encode (corrected 2026-05-29 from live captures)
@@ -39,7 +39,7 @@ The original recon in this section was partially wrong. The corrected flow below
 - Encoding: the HTTP `Content-Type` header lies (says `iso-8859-15`); the page's `<meta charset>` is `windows-1252` and that's truthful. Save `response.content` raw, decode with `.decode('windows-1252')`. Umlauts then render correctly.
 - Session timeout: **29.5 min** — complete each scan well within.
 - Detail URL: `https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseDetail.aspx?id=<int>` (singular *Detail*, lowercase `id` query param — verified from the page-1 fixture).
-- District field: `ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$<N>` where N is the *checkbox index*, not the district id. District 31 (Mitte) → index 5. Build the full N→district-id map by parsing `form-initial.html` once at startup, or hardcode after verification.
+- District field: `ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$<N>` where N is the *checkbox index*, not the district id. District 31 (Mitte) -> index 5. Build the full N->district-id map by parsing `form-initial.html` once at startup, or hardcode after verification.
 - Result rows on `CourseList.aspx`: `<tr class="DataGridItem">` and `<tr class="DataGridAlternatingItem">`; each row contains a link of the shape `CourseDetail.aspx?id=<int>`. 10 results per page. Page label `Seite <N> von <M>` indicates total pages.
 - Availability literals in results: `>2`, `2`, `1`, `belegt`. Waitlist behavior is implicit; not surfaced in row text by default.
 - `robots.txt` blocks only `msnbot/1.0` and `Wdb-Suchportal-Bot` — generic UA fine.
@@ -53,7 +53,7 @@ The original recon in this section was partially wrong. The corrected flow below
 - [x] Directory skeleton (`src/vhsbot/`, `tests/fixtures/`, `tasks/`)
 - [x] `pyproject.toml` — Python 3.13, deps, uv config, ruff config, pytest config
 - [x] `.gitignore` — Python + uv + `.env` + `/data/` + `.venv/`
-- [x] `.python-version` → `3.13`
+- [x] `.python-version` -> `3.13`
 - [x] `.env.example` — all env vars with placeholders
 - [x] `README.md` — quick start, env vars, deploy notes
 - [x] `Dockerfile` — multi-stage uv build on `python:3.13-slim`
@@ -108,8 +108,8 @@ The original recon in this section was partially wrong. The corrected flow below
 ### Phase 2 — scraper
 
 - [x] **Phase 2a — parser** (`src/vhsbot/parser.py`): `parse_form_state`, `parse_results_page`, `has_next_page`. Pure functions over raw response bytes; decoded inside the parser with `windows-1252`. 11 tests.
-- [x] **Phase 2b — HTTP orchestrator** (`src/vhsbot/scraper.py`): `crawl_district(client, district_checkbox_index, sleep_seconds)` drives the full GET-form → POST-Erweitert → POST-search → POST-next-page loop. State re-parsed from every response. Sleep between requests configurable. Dependency-injected `httpx.AsyncClient` (production wires UA + cookies; tests inject `_FixtureTransport` replaying captured HTML). 3 tests; verified the orchestrator (a) uses the real `btnSearch=Suchen` submit, not `__EVENTTARGET`, (b) sends district checkbox by index, (c) paginates via image-input coords with refreshed `__EVENTVALIDATION`, (d) stops when `has_next_page` returns false. Total 37 tests, ruff clean.
-- [x] **Phase 2c — district map + crawl wrapper**: `parse_district_map(html_bytes)` reads the GET response and yields `district_id → checkbox_index` (15 entries, anchor 31 → 5 verified). `crawl(client, district_ids, sleep_seconds)` does one initial GET to build the map, validates ids (raises `ValueError` listing unknown ids), then loops `crawl_district` per district in sorted order and dedups snapshots by `kurs_id` (first-occurrence wins). 3 new tests; 40 total, ruff clean. **Snapshot persistence deferred to Phase 5** — it is an operational concern coupled to the daily scheduler, not the pure HTTP orchestrator.
+- [x] **Phase 2b — HTTP orchestrator** (`src/vhsbot/scraper.py`): `crawl_district(client, district_checkbox_index, sleep_seconds)` drives the full GET-form -> POST-Erweitert -> POST-search -> POST-next-page loop. State re-parsed from every response. Sleep between requests configurable. Dependency-injected `httpx.AsyncClient` (production wires UA + cookies; tests inject `_FixtureTransport` replaying captured HTML). 3 tests; verified the orchestrator (a) uses the real `btnSearch=Suchen` submit, not `__EVENTTARGET`, (b) sends district checkbox by index, (c) paginates via image-input coords with refreshed `__EVENTVALIDATION`, (d) stops when `has_next_page` returns false. Total 37 tests, ruff clean.
+- [x] **Phase 2c — district map + crawl wrapper**: `parse_district_map(html_bytes)` reads the GET response and yields `district_id -> checkbox_index` (15 entries, anchor 31 -> 5 verified). `crawl(client, district_ids, sleep_seconds)` does one initial GET to build the map, validates ids (raises `ValueError` listing unknown ids), then loops `crawl_district` per district in sorted order and dedups snapshots by `kurs_id` (first-occurrence wins). 3 new tests; 40 total, ruff clean. **Snapshot persistence deferred to Phase 5** — it is an operational concern coupled to the daily scheduler, not the pure HTTP orchestrator.
   - **Review pass (post-0380405)**: `parse_district_map` moved from `scraper.py` to `parser.py` (its natural home — pure-bytes parsing alongside `parse_form_state`/`parse_results_page`). "Alle Bezirke" wildcard (district id 0) now filtered out of the map so callers cannot pass district_id=0 through validation. `crawl` short-circuits to `[]` on empty `district_ids` (no network), widened to `Iterable[int]`. Dedup test rewritten: a new `_DedupTransport` mints per-district disjoint-but-overlapping result sets (ids 1000..1009 vs 1005..1014) with per-district title sentinels, so the test now proves both (a) cross-district dedup and (b) first-occurrence-wins. Plus five new edge-case tests (empty bytes, non-int value, duplicate-district, Alle-Bezirke exclusion, empty district set, single-district crawl). 46 total, ruff clean.
 
 ### Phase 3 — matching + diff
@@ -119,7 +119,7 @@ The original recon in this section was partially wrong. The corrected flow below
   - `matches(course: CourseSnapshot, keywords: Iterable[str]) -> list[str]` — substring match against `fold(title) + " " + fold(course_number)`; skips empty keywords; dedups by folded form; preserves original casing in output. 9 tests.
 - [x] `src/vhsbot/diff.py`:
   - `classify(current, previous) -> ClassifyResult` (`Literal["new", "back_in_stock", "unchanged", "still_full"]`, re-exported).
-  - "new" when previous is None; "back_in_stock" on belegt→{>2,2,1}; "still_full" on belegt→belegt; "unchanged" otherwise (incl. going-out-of-stock).
+  - "new" when previous is None; "back_in_stock" on belegt->{>2,2,1}; "still_full" on belegt->belegt; "unchanged" otherwise (incl. going-out-of-stock).
   - Raises `ValueError` if `current.availability` is not one of the four parser literals. 18 tests (mostly parametrized).
   - **Review pass (post-4ba1f64)**: availability literals hoisted to `db.py` as single source of truth (`Availability` Literal alias, `AVAILABILITY_LITERALS`, `BOOKABLE_AVAILABILITY`); `parser._availability` and `diff.classify` now import from there. `classify` validates `previous.last_availability` symmetrically (drift in stored state raises just like drift in parser output). Test additions: input-order pin for `matches`, bridge-behavior pin for space-containing keywords (with docstring callout), fold/match edge cases, parser↔db cross-module invariant test. 95 total, ruff clean.
 
@@ -150,7 +150,8 @@ The original recon in this section was partially wrong. The corrected flow below
   - [x] `course_card(course, matched_kws, reason, detail_url) -> tuple[str, InlineKeyboardMarkup]` — Markdown V2 via PTB's `escape_markdown(version=2)`. `reason ∈ {"new","back_in_stock","backfill"}` drives a prefix line; the old `handlers.build_course_message` is deleted and `_run_backfill` now calls `course_card(..., reason="backfill")`.
 - [x] `src/vhsbot/main.py`:
   - [x] `job_queue.run_daily(daily_scan, time=settings.scan_time.replace(tzinfo=settings.tz), name="vhsbot-daily-scan")` registered after `register_handlers`.
-- **Tests added in Phase 5**: 4 `test_formatting.py` (reason prefix x3 + MD-V2 escape + button URL), 9 `test_jobs.py` (skip empty / classify / fanout / paused / cap / unconditional upsert / snapshot persistence / pruning + exception re-raise), 2 `test_scraper.py` (callback invocation per page + backward-compat default-None). Plus 3 in `test_db.py` for `upsert_seen_course`. 142 → 157 tests, ruff clean.
+- **Tests added in Phase 5**: 4 `test_formatting.py` (reason prefix x3 + MD-V2 escape + button URL), 9 `test_jobs.py` (skip empty / classify / fanout / paused / cap / unconditional upsert / snapshot persistence / pruning + exception re-raise), 2 `test_scraper.py` (callback invocation per page + backward-compat default-None). Plus 3 in `test_db.py` for `upsert_seen_course`. 142 -> 157 tests, ruff clean.
+- [x] **Phase 5 review pass (7 reviewers, 2026-05-30)** — BLOCKER: cap-counter no longer double-counts in-scan sends (`prior_count` snapshotted once per user at scan start). MAJORs fixed: per-user district filtering in the fan-out (was unioned and over-broadcasting), `/scan` wired to `daily_scan` with a `scan_running` concurrency guard, partial-district failure recovery (`daily_scan` now drives `crawl_district` per-district + try/except so a single failing district doesn't strand the others' seen_courses upserts; first error re-raised after the rest of the scan persists), main.py wiring coverage via extracted `build_application` helper. `add_error_handler` was already registered in `handlers.register_handlers` (line 671) — reviewer's grep was wrong; now also pinned by `test_main.py`. MINORs bundled: `_UserSubs` -> frozen dataclass with `keywords: tuple[str, ...]` and `include_waitlist` dropped (inert), `_locked_db` hoisted to `_app_state.py` as `locked_db` (shared between handlers + jobs), pruning boundary tightened (`<= cutoff` so exactly-7-day-old dirs are pruned), snapshot writer + prune wrapped in `try/except OSError` + warning log (debug-only artefacts never abort the scan), `shutil.rmtree` replaces the hand-rolled `_rmtree`, dead `_utc_now_iso` deleted, dead `__all__ = ["CourseSnapshot", ...]` re-export dropped, `_since_24h_iso` computed once at scan start, `Any` types replaced (`sqlite3.Connection` + `scraper.RawHtmlCallback`), `NotificationReason` literal added in `diff.py` and consumed via `cast` in the fan-out, runtime `assert` added to `course_card` for invalid reasons. 157 -> 169 tests, ruff clean.
 
 ### Phase 6 — tests
 
@@ -172,8 +173,8 @@ The original recon in this section was partially wrong. The corrected flow below
 ### Phase 8 — verification (per CLAUDE.md "Verification Before Done")
 
 - [ ] `/start` flow works end-to-end on real Telegram client
-- [ ] Watch a keyword that should match → confirm backfill sends matches
-- [ ] Manually trigger `/scan` → confirm a fresh full crawl runs and stores snapshot
+- [ ] Watch a keyword that should match -> confirm backfill sends matches
+- [ ] Manually trigger `/scan` -> confirm a fresh full crawl runs and stores snapshot
 - [ ] Simulate "back in stock": manually flip a `seen_courses.last_availability` from "belegt" to ">2" via sqlite3 CLI; trigger /scan; confirm notification fires
 - [ ] Confirm 08:00 schedule by setting SCAN_TIME to "T+1min" temporarily and watching logs
 - [ ] Restart container; confirm subscriptions persist (DB volume works)

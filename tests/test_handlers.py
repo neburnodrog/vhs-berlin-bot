@@ -690,3 +690,80 @@ class TestRegisterHandlersAttachesErrorHandler:
         # MAJOR-2 pin: register_handlers wires the global error handler.
         app = _build_app(settings)
         assert handlers.global_error_handler in app.error_handlers
+
+
+# ---------------------------------------------------------------------------
+# /scan wiring (Phase 5 review fix — MAJOR-4)
+# ---------------------------------------------------------------------------
+
+
+class TestScanCommand:
+    async def test_scan_command_runs_daily_scan(
+        self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``/scan`` must invoke ``jobs.daily_scan`` (Phase 5 wiring)."""
+        from vhsbot import jobs
+
+        called: list[bool] = []
+
+        async def fake_daily_scan(context: object) -> None:
+            called.append(True)
+
+        monkeypatch.setattr(jobs, "daily_scan", fake_daily_scan)
+        # handlers.scan imports jobs.daily_scan at call time; patch jobs.daily_scan.
+        monkeypatch.setattr(handlers, "_daily_scan", fake_daily_scan, raising=False)
+
+        update = _make_update(user_id=111)
+        ctx = _make_context(settings=settings, conn=conn, client=object())
+
+        await handlers.scan(update, ctx)
+
+        assert called == [True], "scan handler must call jobs.daily_scan"
+        update.message.reply_text.assert_awaited()
+
+    async def test_scan_command_rejects_when_already_running(
+        self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Concurrency guard: second concurrent /scan must reject politely."""
+        from vhsbot import jobs
+
+        async def slow_daily_scan(context: object) -> None:
+            # Simulate work; we won't actually run this — the guard short-circuits.
+            return None
+
+        monkeypatch.setattr(jobs, "daily_scan", slow_daily_scan)
+        monkeypatch.setattr(handlers, "_daily_scan", slow_daily_scan, raising=False)
+
+        update = _make_update(user_id=111)
+        ctx = _make_context(settings=settings, conn=conn, client=object())
+        # Pre-flip the guard so the second-caller branch fires.
+        ctx.bot_data["scan_running"] = True
+
+        await handlers.scan(update, ctx)
+
+        text = update.message.reply_text.await_args.args[0]
+        assert "already" in text.lower() or "running" in text.lower(), (
+            f"reject message must say a scan is already running; got: {text!r}"
+        )
+
+    async def test_scan_command_clears_flag_on_exception(
+        self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If daily_scan raises, the scan_running flag MUST be cleared (try/finally)."""
+        from vhsbot import jobs
+
+        async def boom_daily_scan(context: object) -> None:
+            raise RuntimeError("simulated crash")
+
+        monkeypatch.setattr(jobs, "daily_scan", boom_daily_scan)
+        monkeypatch.setattr(handlers, "_daily_scan", boom_daily_scan, raising=False)
+
+        update = _make_update(user_id=111)
+        ctx = _make_context(settings=settings, conn=conn, client=object())
+
+        with pytest.raises(RuntimeError, match="simulated crash"):
+            await handlers.scan(update, ctx)
+
+        assert ctx.bot_data.get("scan_running") is False, (
+            "scan_running flag must be cleared by try/finally even on exception"
+        )

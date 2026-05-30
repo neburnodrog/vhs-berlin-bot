@@ -17,14 +17,23 @@ fire-and-forget alternative because:
 2. The blocking flow is materially simpler — no orphan-task lifetime
    management, no race against ``shutdown``.
 
-Phase 5 will add the daily ``JobQueue.run_daily`` scan; that's the right
-place to introduce asynchronous fan-out, not here.
+The Phase 5 daily ``JobQueue.run_daily`` scan + manual ``/scan`` trigger
+share the same ``daily_scan`` callback; manual triggers use a
+``scan_running`` bot_data flag so a manual call during the scheduled
+window correctly defers.
 
 **Rate limiting:** ``AIORateLimiter`` throttles *every* outbound request
 by default — including the 15-message backfill burst. We don't pass any
 custom per-call ``rate_limit_args``; PTB's defaults (~30 req/s overall,
 ~20/s per group) sit well inside Telegram's limits for our single-user
 workload.
+
+``run()`` is the script entry point; the testable surface is
+:func:`build_application`, which assembles the ``Application`` with all
+handlers + the daily-scan job registered but does NOT call
+``run_polling``. Tests construct an Application via ``build_application``
+and introspect ``app.job_queue.jobs()`` + ``app.error_handlers`` +
+``app.handlers`` without ever opening a real Telegram connection.
 """
 
 from __future__ import annotations
@@ -56,6 +65,8 @@ async def _post_init(application: Application) -> None:
     application.bot_data[BD_CLIENT] = client
     application.bot_data[BD_DB] = conn
     application.bot_data[BD_DB_LOCK] = asyncio.Lock()
+    # Manual /scan concurrency guard — see handlers.scan + jobs.daily_scan.
+    application.bot_data["scan_running"] = False
     logger.info("vhs-berlin-bot ready (db=%s)", settings.db_path)
 
 
@@ -70,14 +81,16 @@ async def _post_shutdown(application: Application) -> None:
     logger.info("vhs-berlin-bot stopped")
 
 
-def run() -> None:
-    """Script entry point — see ``[project.scripts]`` in pyproject.toml."""
-    settings = load_settings()
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        level=getattr(logging, settings.log_level, logging.INFO),
-    )
+def build_application(settings: Settings) -> Application:
+    """Assemble + return a fully-wired PTB ``Application``.
 
+    Does NOT call ``run_polling()`` — that's the script entrypoint's
+    job. Exposed so tests can introspect the registered job-queue jobs,
+    error handlers, and command handlers without standing up a real
+    Telegram connection. The two are kept separate so a typo in the
+    daily-scan callback name (or schedule time) is caught by a unit
+    test rather than discovered in production.
+    """
     application = (
         Application.builder()
         .token(settings.telegram_bot_token)
@@ -99,6 +112,18 @@ def run() -> None:
             name="vhsbot-daily-scan",
         )
 
+    return application
+
+
+def run() -> None:
+    """Script entry point — see ``[project.scripts]`` in pyproject.toml."""
+    settings = load_settings()
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=getattr(logging, settings.log_level, logging.INFO),
+    )
+
+    application = build_application(settings)
     application.run_polling()
 
 

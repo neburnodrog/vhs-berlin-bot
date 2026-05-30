@@ -30,9 +30,7 @@ we tell the user the backfill was interrupted and let them re-trigger.
 from __future__ import annotations
 
 import logging
-import sqlite3
-from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import Any
 
@@ -54,7 +52,7 @@ from telegram.ext import (
 from telegram.helpers import escape_markdown
 
 from vhsbot import scraper
-from vhsbot._app_state import BD_CLIENT, BD_DB, BD_DB_LOCK, BD_SETTINGS
+from vhsbot._app_state import BD_CLIENT, BD_SETTINGS, locked_db
 from vhsbot.config import Settings
 from vhsbot.db import (
     BOOKABLE_AVAILABILITY,
@@ -67,6 +65,7 @@ from vhsbot.db import (
     upsert_user_settings,
 )
 from vhsbot.formatting import course_card
+from vhsbot.jobs import daily_scan as _daily_scan
 from vhsbot.matching import matches
 from vhsbot.parser import parse_district_map
 
@@ -115,8 +114,7 @@ def build_help_text() -> str:
         "/districts — re-pick your districts",
         "/pause — mute daily notifications",
         "/resume — un-mute daily notifications",
-        # TODO(Phase 5): once a real admin gate exists, re-add "(admin only)".
-        "/scan — trigger a manual scan",
+        "/scan — trigger a manual scan now",
     ]
     return escape_markdown_v2("\n".join(lines))
 
@@ -233,20 +231,10 @@ def _client(context: ContextTypes.DEFAULT_TYPE) -> httpx.AsyncClient:
     return context.bot_data[BD_CLIENT]
 
 
-@asynccontextmanager
-async def _locked_db(
-    context: ContextTypes.DEFAULT_TYPE,
-) -> AsyncIterator[sqlite3.Connection]:
-    """Acquire the shared DB lock and yield the connection.
-
-    Every site in this module that touches sqlite goes through this
-    helper. The lock is shallow — it does NOT cover the time spent
-    awaiting the network in ``_run_backfill`` — but it does serialise
-    the writes themselves, which is what the Phase 1 plan promised.
-    """
-    lock = context.bot_data[BD_DB_LOCK]
-    async with lock:
-        yield context.bot_data[BD_DB]
+# DB-lock helper lives in ``_app_state`` so jobs.py + handlers.py share it
+# without a circular import. Alias ``_locked_db = locked_db`` keeps the
+# existing call sites stable.
+_locked_db = locked_db
 
 
 async def _fetch_district_map(client: httpx.AsyncClient, settings: Settings) -> dict[int, int]:
@@ -506,12 +494,38 @@ async def resume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # TODO(Phase 5): wire this to jobs.daily_scan(context) — currently the
-    # daily-scan job does not exist yet, so /scan is a stubbed trigger that
-    # only logs and acknowledges the user.
-    logger.info("manual /scan requested by user_id=%s", update.effective_user.id)  # type: ignore[union-attr]
+    """Manual ``/scan`` trigger — wired to :func:`vhsbot.jobs.daily_scan`.
+
+    Concurrency guard: ``application.bot_data["scan_running"]`` is a
+    single bool flag. The daily scheduled run sets the same flag on
+    entry (via this handler's ``try/finally`` wrapping), so a manual
+    ``/scan`` issued during the scheduled window correctly defers
+    rather than running two scans in parallel. The ``finally`` clears
+    the flag even when ``daily_scan`` raises, so a transient crash
+    does not strand the bot in a "scan_running=True" state.
+
+    Tests patch ``vhsbot.handlers._daily_scan`` rather than
+    ``vhsbot.jobs.daily_scan`` — the handler keeps a local module-level
+    alias so the patch site is stable.
+    """
+    user = update.effective_user
+    assert user is not None
     assert update.message is not None
-    await update.message.reply_text("Manual scan triggered. (Daily-scan wiring lands in Phase 5.)")
+    logger.info("manual /scan requested by user_id=%s", user.id)
+
+    if context.bot_data.get("scan_running"):
+        await update.message.reply_text("A scan is already running, try again in a few minutes.")
+        return
+
+    context.bot_data["scan_running"] = True
+    try:
+        await update.message.reply_text("Manual scan started.")
+        # Call through the module-level alias so tests can monkeypatch
+        # ``handlers._daily_scan`` directly.
+        await _daily_scan(context)
+        await update.message.reply_text("Manual scan complete.")
+    finally:
+        context.bot_data["scan_running"] = False
 
 
 # ---------------------------------------------------------------------------

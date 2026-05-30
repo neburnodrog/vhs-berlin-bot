@@ -48,7 +48,16 @@ def course_card(
 
     The inline keyboard always carries a single "Details oeffnen" button
     pointing at ``detail_url``.
+
+    A runtime ``assert`` catches the case where a caller bypasses the
+    type-checker (e.g. ``cast()`` from a wider ``str``) and passes a
+    reason outside the literal set — the prefix table KeyError would
+    otherwise be opaque.
     """
+    assert reason in {"new", "back_in_stock", "backfill"}, (
+        f"course_card called with unknown reason {reason!r}; "
+        f"expected one of new, back_in_stock, backfill"
+    )
     matched_raw = ", ".join(matched_keywords) if matched_keywords else ""
     prefix = _esc(_REASON_PREFIX[reason].format(kw=matched_raw))
 

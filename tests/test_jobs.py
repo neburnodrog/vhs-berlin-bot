@@ -17,7 +17,7 @@ that boundary.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from datetime import time
 from pathlib import Path
 from typing import Any
@@ -114,34 +114,49 @@ def _patch_crawl(
     *,
     capture_callback: list[tuple[int, int, bytes]] | None = None,
 ) -> None:
-    """Replace ``scraper.crawl`` so daily_scan returns ``snapshots``.
+    """Replace ``scraper.crawl_district`` so daily_scan returns ``snapshots``.
+
+    Phase 5-review refactor: ``daily_scan`` now drives ``crawl_district``
+    per-district itself (so a single failing district doesn't lose every
+    other district's seen_courses upserts). The patch returns the same
+    ``snapshots`` list for the FIRST district visited and ``[]`` for the
+    rest, which preserves the pre-refactor test semantics (snapshots get
+    classified + fanned out exactly once).
 
     If ``capture_callback`` is provided, the substitute also invokes the
-    callback once per snapshot with synthetic ``(district, page, html)``
-    triples so the snapshot-writer side of ``daily_scan`` can be exercised
-    without going through the real scraper.
+    raw-HTML callback once per district with synthetic
+    ``(district, page, html)`` triples so the snapshot-writer side of
+    ``daily_scan`` can be exercised without going through the real scraper.
     """
+    delivered: dict[int, bool] = {}
 
-    async def fake_crawl(
+    async def fake_crawl_district(
         *,
         client: object,
-        district_ids: Iterable[int],
+        district_checkbox_index: int,
         sleep_seconds: float,
+        district_id: int | None = None,
         raw_html_callback: Callable[[int, int, bytes], None] | None = None,
     ) -> list[CourseSnapshot]:
-        if capture_callback is not None and raw_html_callback is not None:
-            # Synthesize one (district, page0) call per district.
-            for d in sorted(set(district_ids)):
-                html = b"<html>page-0 for district " + str(d).encode() + b"</html>"
-                raw_html_callback(d, 0, html)
-                capture_callback.append((d, 0, b"<html>"))
-        elif raw_html_callback is not None:
-            # Always call once per requested district even without capture.
-            for d in sorted(set(district_ids)):
-                raw_html_callback(d, 0, b"<html>page-0</html>")
-        return snapshots
+        assert district_id is not None
+        if raw_html_callback is not None:
+            html = b"<html>page-0 for district " + str(district_id).encode() + b"</html>"
+            raw_html_callback(district_id, 0, html)
+            if capture_callback is not None:
+                capture_callback.append((district_id, 0, b"<html>"))
+        # Hand the snapshots to the FIRST district visited only.
+        if not delivered:
+            delivered[district_id] = True
+            return snapshots
+        return []
 
-    monkeypatch.setattr(jobs.scraper, "crawl", fake_crawl)
+    monkeypatch.setattr(jobs.scraper, "crawl_district", fake_crawl_district)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        # Cover the typical district set used by the tests; harmless extras.
+        return {31: 5, 32: 2, 33: 3, 38: 4, 39: 6}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +412,263 @@ async def test_daily_scan_reraises_exception_for_global_handler(
     async def boom_crawl(**kw: Any) -> list[CourseSnapshot]:
         raise RuntimeError("VHS Berlin returned 503")
 
-    monkeypatch.setattr(jobs.scraper, "crawl", boom_crawl)
+    monkeypatch.setattr(jobs.scraper, "crawl_district", boom_crawl)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
     ctx = _make_context(settings=settings, conn=conn)
 
     with pytest.raises(RuntimeError, match="503"):
         await jobs.daily_scan(ctx)
+
+
+# ---------------------------------------------------------------------------
+# BLOCKER-1: cap counter must not double-count
+# ---------------------------------------------------------------------------
+
+
+async def test_cap_counter_does_not_double_count_after_in_scan_send(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """13 prior notifications + 5 in-scan matches = exactly 2 sends (cap=15).
+
+    The pre-fix implementation re-queried ``count_notifications_since``
+    AFTER each ``record_notification`` insert AND also bumped its in-scan
+    counter, double-counting the same send. Effective per-user budget was
+    7-8 instead of 15. The fix snapshots the prior count once per user.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    for i in range(13):
+        db.record_notification(conn, user_id=111, kurs_id=9000 + i, reason="new")
+
+    # 5 fresh matches; cap = 15; 13 prior leaves room for 2 sends.
+    snapshots = [_snap(kurs_id=5000 + i, title=f"Yoga {i}", availability=">2") for i in range(5)]
+    _patch_crawl_district(monkeypatch, {31: snapshots})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    assert ctx.bot.send_message.await_count == 2, (
+        "13 prior + cap=15 must allow exactly 2 sends; double-counting yields 1"
+    )
+
+
+# ---------------------------------------------------------------------------
+# MAJOR-2: per-user district filtering
+# ---------------------------------------------------------------------------
+
+
+async def test_daily_scan_filters_by_user_districts(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """User A subscribed to district 31 only; course from district 32 reaches no one but B."""
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+    db.upsert_user_settings(conn, user_id=222, districts=[32])
+    db.add_subscription(conn, user_id=222, keyword="Yoga")
+
+    # Snapshot from district 32 only. User A (district 31) must NOT receive it.
+    snap_d32 = _snap(kurs_id=7000, title="Yoga sanft", availability=">2", district="Spandau")
+    _patch_crawl_district(monkeypatch, {31: [], 32: [snap_d32]})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    # Only user 222 should have received a message — user 111 is filtered out.
+    chat_ids = [call.kwargs["chat_id"] for call in ctx.bot.send_message.await_args_list]
+    assert 111 not in chat_ids, "user A (district 31 only) must not receive district-32 course"
+    assert chat_ids == [222]
+
+
+# ---------------------------------------------------------------------------
+# MAJOR-6: mid-scrape crash data loss
+# ---------------------------------------------------------------------------
+
+
+async def test_daily_scan_partial_district_failure_persists_completed_state(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If district 32 raises mid-scan, district 31's seen_courses rows must still be persisted."""
+    db.upsert_user_settings(conn, user_id=111, districts=[31, 32])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    snap_d31 = _snap(kurs_id=8000, title="Yoga sanft", availability=">2", district="Mitte")
+
+    async def per_district(
+        *,
+        client: object,
+        district_checkbox_index: int,
+        sleep_seconds: float,
+        district_id: int | None = None,
+        raw_html_callback: Callable[[int, int, bytes], None] | None = None,
+    ) -> list[CourseSnapshot]:
+        if district_id == 31:
+            return [snap_d31]
+        raise RuntimeError("district 32 exploded")
+
+    # Monkeypatch BOTH crawl_district and the district map indirection used by crawl.
+    monkeypatch.setattr(jobs.scraper, "crawl_district", per_district)
+
+    # daily_scan needs to know how to map district_id -> checkbox_index.
+    # Stub the district-map fetcher so we don't need a real GET.
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5, 32: 2}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+
+    ctx = _make_context(settings=settings, conn=conn)
+
+    # The scan must re-raise so PTB's error handler sees the failure,
+    # AND it must have persisted district 31's snapshot before doing so.
+    with pytest.raises(RuntimeError, match="district 32"):
+        await jobs.daily_scan(ctx)
+
+    seen = db.get_seen_course(conn, kurs_id=8000)
+    assert seen is not None, (
+        "district 31's snapshot must be in seen_courses despite district 32's failure"
+    )
+
+
+def _patch_crawl_district(
+    monkeypatch: pytest.MonkeyPatch,
+    per_district_snapshots: dict[int, list[CourseSnapshot]],
+) -> None:
+    """Patch scraper.crawl_district + the district-map fetcher.
+
+    ``per_district_snapshots`` maps district_id -> snapshots to return for
+    that district. Any district not in the map returns ``[]``.
+
+    Also patches ``jobs._fetch_district_map`` so the scan can map
+    district_id -> checkbox_index without a real HTTP GET. The checkbox
+    indices are synthetic (district_id // 6) but the test only cares about
+    the resulting per-district fan-out.
+    """
+
+    async def per_district(
+        *,
+        client: object,
+        district_checkbox_index: int,
+        sleep_seconds: float,
+        district_id: int | None = None,
+        raw_html_callback: Callable[[int, int, bytes], None] | None = None,
+    ) -> list[CourseSnapshot]:
+        assert district_id is not None
+        if raw_html_callback is not None:
+            raw_html_callback(district_id, 0, b"<html>fake</html>")
+        return per_district_snapshots.get(district_id, [])
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", per_district)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        # Synthetic mapping: every requested district gets some non-zero index.
+        return {d: d % 16 for d in per_district_snapshots} or {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+
+
+# ---------------------------------------------------------------------------
+# Snapshot writer error handling
+# ---------------------------------------------------------------------------
+
+
+async def test_snapshot_writer_logs_and_continues_on_oserror(
+    settings: Settings,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``path.write_bytes`` raising OSError must NOT abort the scan."""
+    import logging as _logging
+
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    # Force write_bytes to raise.
+    original_write = Path.write_bytes
+
+    def boom_write(self: Path, data: bytes) -> int:
+        if self.suffix == ".html":
+            raise OSError("disk full")
+        return original_write(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", boom_write)
+
+    _patch_crawl_district(monkeypatch, {31: [_snap(kurs_id=9100, availability=">2")]})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    with caplog.at_level(_logging.WARNING):
+        # Must NOT raise — snapshot writes are debug-only.
+        await jobs.daily_scan(ctx)
+
+    assert any("snapshot write failed" in rec.message for rec in caplog.records)
+
+
+async def test_prune_continues_on_permission_error(
+    settings: Settings,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``shutil.rmtree`` raising OSError must log + continue, not crash the scan."""
+    import logging as _logging
+
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    today = _dt.now(settings.tz).date()
+    eight_days = today - _td(days=8)
+    settings.snapshot_dir.mkdir(parents=True, exist_ok=True)
+    (settings.snapshot_dir / eight_days.isoformat()).mkdir()
+
+    import shutil as _shutil
+
+    original = _shutil.rmtree
+
+    def boom_rmtree(path: object, *args: object, **kwargs: object) -> None:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(_shutil, "rmtree", boom_rmtree)
+    _patch_crawl_district(monkeypatch, {31: []})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    with caplog.at_level(_logging.WARNING):
+        # Must NOT raise.
+        await jobs.daily_scan(ctx)
+
+    assert any("snapshot prune failed" in rec.message for rec in caplog.records)
+    # Restore so other tests aren't affected (monkeypatch undoes this anyway).
+    monkeypatch.setattr(_shutil, "rmtree", original)
+
+
+async def test_prune_deletes_directory_exactly_7_days_old(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Boundary: a dir exactly ``today - 7d`` old must be pruned (matches `weekly`)."""
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    today = _dt.now(settings.tz).date()
+    seven_days = today - _td(days=7)
+
+    settings.snapshot_dir.mkdir(parents=True, exist_ok=True)
+    (settings.snapshot_dir / seven_days.isoformat()).mkdir()
+    (settings.snapshot_dir / seven_days.isoformat() / "31-page-0.html").write_bytes(b"old")
+
+    _patch_crawl_district(monkeypatch, {31: []})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    assert not (settings.snapshot_dir / seven_days.isoformat()).exists(), (
+        "directory exactly 7 days old must be pruned (weekly cleanup semantics)"
+    )
