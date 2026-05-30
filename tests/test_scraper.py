@@ -9,16 +9,15 @@ fixture.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 from typing import ClassVar
 
 import httpx
 import pytest
+from conftest import FIXTURES, _FixtureTransport, _html_response
 
 from vhsbot.parser import parse_results_page
 from vhsbot.scraper import crawl, crawl_district
 
-FIXTURES = Path(__file__).parent / "fixtures"
 _NEXT_BTN_INPUT_RE = re.compile(
     rb'<input[^>]*name="ctl00\$Content\$ILDataGrid1\$ctl01\$ctl04"[^>]*>',
     re.IGNORECASE,
@@ -27,41 +26,6 @@ _CHECKBOX_IDX_RE = re.compile(rb"CheckBoxListDistricts%24(\d+)=on")
 # Captures the title link's href + the inner title text so we can rewrite
 # both atomically per row.
 _TITLE_LINK_RE = re.compile(rb'(<a href="CourseDetail\.aspx\?id=)(\d+)(")([^>]*>)([^<]+)(</a>)')
-
-
-class _FixtureTransport(httpx.AsyncBaseTransport):
-    """Replays the captured 4-stage flow plus a synthetic "no more pages" terminator."""
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, str, bytes]] = []
-        self._next_page_count = 0
-        self._form_initial = (FIXTURES / "form-initial.html").read_bytes()
-        self._page_1 = (FIXTURES / "search-district-31-page-1.html").read_bytes()
-        self._page_2 = (FIXTURES / "search-district-31-page-2.html").read_bytes()
-        self._page_2_stripped = _NEXT_BTN_INPUT_RE.sub(b"", self._page_2)
-        assert self._page_2_stripped != self._page_2, "regex must match the next-arrow input"
-
-    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        body = await request.aread()
-        url = str(request.url)
-        self.calls.append((request.method, url, body))
-
-        if request.method == "GET" and "CourseSearch.aspx" in url:
-            return _html_response(self._form_initial)
-
-        if request.method == "POST" and b"lbtnTab2=Erweitert" in body:
-            return _html_response(self._form_initial)
-
-        if request.method == "POST" and b"btnSearch=Suchen" in body:
-            return _html_response(self._page_1)
-
-        if request.method == "POST" and b"ctl01%24ctl04.x=" in body:
-            self._next_page_count += 1
-            if self._next_page_count == 1:
-                return _html_response(self._page_2)
-            return _html_response(self._page_2_stripped)
-
-        raise AssertionError(f"unexpected request: {request.method} {url} body={body[:200]!r}")
 
 
 class _DedupTransport(httpx.AsyncBaseTransport):
@@ -141,14 +105,6 @@ class _DedupTransport(httpx.AsyncBaseTransport):
             return _html_response(self._render_page(checkbox_idx))
 
         raise AssertionError(f"unexpected request: {request.method} {url} body={body[:200]!r}")
-
-
-def _html_response(content: bytes) -> httpx.Response:
-    return httpx.Response(
-        200,
-        content=content,
-        headers={"Content-Type": "text/html; charset=iso-8859-15"},
-    )
 
 
 async def test_crawl_district_paginates_until_no_next_page() -> None:

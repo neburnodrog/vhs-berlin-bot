@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
+from conftest import set_last_availability
 
 from vhsbot import db
 
@@ -342,6 +343,9 @@ def test_set_last_availability_overwrites_only_that_column(conn: sqlite3.Connect
     ``"belegt"`` so the next scan classifies it as ``back_in_stock``. It
     must NOT touch ``last_seen_at``, ``last_notified_at``, or any other
     column — those are owned by the production upsert path.
+
+    The helper itself lives in :mod:`tests.conftest` (it is test-only —
+    production code never overwrites ``last_availability`` directly).
     """
     db.upsert_seen_course(conn, _snap(kurs_id=4000, availability=">2"), notified=True)
     before = db.get_seen_course(conn, kurs_id=4000)
@@ -349,7 +353,7 @@ def test_set_last_availability_overwrites_only_that_column(conn: sqlite3.Connect
     assert before.last_availability == ">2"
     assert before.last_notified_at is not None
 
-    db.set_last_availability(conn, kurs_id=4000, availability="belegt")
+    set_last_availability(conn, kurs_id=4000, availability="belegt")
 
     after = db.get_seen_course(conn, kurs_id=4000)
     assert after is not None

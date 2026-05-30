@@ -38,13 +38,14 @@ notification list further down.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from datetime import time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from conftest import FIXTURES, _FixtureTransport, _make_context
+from conftest import FIXTURES, _FixtureTransport, _make_context, set_last_availability
 
 from vhsbot import db, jobs
 from vhsbot.config import Settings
@@ -94,10 +95,12 @@ def e2e_settings(tmp_path: Path) -> Settings:
 
 
 @pytest.fixture
-def e2e_conn() -> sqlite3.Connection:
-    """One shared in-memory connection, seeded with user 42 watching ``"Spanisch"``.
+def e2e_conn() -> Iterator[sqlite3.Connection]:
+    """A fresh in-memory connection per test; stage fixtures replay prior scans on top of it.
 
-    Survives across the three scan-pass tests via stage fixtures below.
+    Seeded with user 42 watching ``"Spanisch"``. Function-scoped: each
+    test starts from a clean database. Tests that need the post-scan-1
+    state pull the ``after_scan_1`` stage fixture below.
     """
     conn = db.connect(":memory:")
     db.init_schema(conn)
@@ -111,29 +114,16 @@ def e2e_conn() -> sqlite3.Connection:
 async def after_scan_1(e2e_settings: Settings, e2e_conn: sqlite3.Connection) -> sqlite3.Connection:
     """Run scan 1 and return the seeded connection.
 
-    Downstream stage fixtures chain off this one so scans 2 and 3 build on
-    scan 1's persisted state without each test re-running the first scan
-    inline.
+    Downstream tests consume this fixture so scans 2 / 3 build on scan
+    1's persisted state without each test re-running the first scan
+    inline. Scans 2 and 3 themselves are run inline by their tests —
+    making each test's setup transparent at the call site.
     """
     transport = _FixtureTransport()
     async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
         ctx = _make_context(settings=e2e_settings, conn=e2e_conn, client=client)
         await jobs.daily_scan(ctx)
     return e2e_conn
-
-
-@pytest.fixture
-async def after_scan_2(
-    e2e_settings: Settings, after_scan_1: sqlite3.Connection
-) -> sqlite3.Connection:
-    """Backdate ``last_seen_at`` (so scan 2's bump is measurable), run scan 2."""
-    after_scan_1.execute("UPDATE seen_courses SET last_seen_at = datetime('now', '-1 minute')")
-    after_scan_1.commit()
-    transport = _FixtureTransport()
-    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        ctx = _make_context(settings=e2e_settings, conn=after_scan_1, client=client)
-        await jobs.daily_scan(ctx)
-    return after_scan_1
 
 
 # ---------------------------------------------------------------------------
@@ -239,9 +229,15 @@ async def test_e2e_scan_2_unchanged_dispatches_nothing(
 
 
 async def test_e2e_scan_3_back_in_stock_dispatches_one_notification(
-    e2e_settings: Settings, after_scan_2: sqlite3.Connection
+    e2e_settings: Settings, after_scan_1: sqlite3.Connection
 ) -> None:
     """Force a back-in-stock transition on a previously-notified course.
+
+    Consumes the ``after_scan_1`` stage fixture (post-scan-1 state) and
+    runs scan 2 + scan 3 inline so the full chain is transparent at the
+    call site. Scan 2 leaves availability unchanged; between scans 2 and
+    3 we hand-flip one course's stored availability to ``"belegt"`` so
+    scan 3 classifies it as ``back_in_stock``.
 
     Pick a course we know is bookable in the fixture AND matched our
     keyword, then flip its stored availability to ``"belegt"``. The next
@@ -250,30 +246,39 @@ async def test_e2e_scan_3_back_in_stock_dispatches_one_notification(
     here — picking one whose fixture availability is ``"belegt"`` would
     classify -> ``"still_full"`` -> zero new dispatches.
     """
-    target_kurs_id = after_scan_2.execute(
+    # Scan 2 inline: same fixture, nothing changes -> zero new dispatches.
+    after_scan_1.execute("UPDATE seen_courses SET last_seen_at = datetime('now', '-1 minute')")
+    after_scan_1.commit()
+    transport_2 = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport_2, follow_redirects=True) as client:
+        ctx_2 = _make_context(settings=e2e_settings, conn=after_scan_1, client=client)
+        await jobs.daily_scan(ctx_2)
+
+    # Between scans 2 and 3: hand-flip a bookable-in-fixture course to belegt.
+    target_kurs_id = after_scan_1.execute(
         "SELECT kurs_id FROM seen_courses "
         "WHERE last_availability != 'belegt' "
         "AND kurs_id IN (SELECT kurs_id FROM notification_log WHERE user_id = 42) "
         "LIMIT 1"
     ).fetchone()[0]
-    db.set_last_availability(after_scan_2, kurs_id=target_kurs_id, availability="belegt")
+    set_last_availability(after_scan_1, kurs_id=target_kurs_id, availability="belegt")
 
-    transport = _FixtureTransport()
-    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        ctx = _make_context(settings=e2e_settings, conn=after_scan_2, client=client)
-        await jobs.daily_scan(ctx)
+    transport_3 = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport_3, follow_redirects=True) as client:
+        ctx_3 = _make_context(settings=e2e_settings, conn=after_scan_1, client=client)
+        await jobs.daily_scan(ctx_3)
 
-        # Exactly one back-in-stock dispatch.
-        assert ctx.bot.send_message.await_count == 1, (
+        # Exactly one back-in-stock dispatch from scan 3.
+        assert ctx_3.bot.send_message.await_count == 1, (
             f"scan 3 must dispatch exactly one back-in-stock notification; "
-            f"got {ctx.bot.send_message.await_count}"
+            f"got {ctx_3.bot.send_message.await_count}"
         )
         # The single dispatched message's text contains the "Back in stock" prefix.
-        sent_text = ctx.bot.send_message.await_args.kwargs["text"]
+        sent_text = ctx_3.bot.send_message.await_args.kwargs["text"]
         assert "Back in stock" in sent_text
 
     # notification_log gained one row with reason="back_in_stock".
-    new_log_rows = after_scan_2.execute(
+    new_log_rows = after_scan_1.execute(
         "SELECT kurs_id, reason FROM notification_log WHERE reason = 'back_in_stock'"
     ).fetchall()
     assert len(new_log_rows) == 1

@@ -1,17 +1,17 @@
 """Shared test helpers — exposed as plain importable symbols, not pytest fixtures.
 
-Three helpers used by ``test_jobs.py``, ``test_handlers.py``, and
-``test_e2e.py`` lived inlined (with subtle divergences) in each of those
-files until the Phase 6 review pass. They are now defined here once and
-re-exported so callers can do::
+Helpers used across the ``tests/`` collection (``test_jobs.py``,
+``test_handlers.py``, ``test_e2e.py``, ``test_scraper.py``) lived inlined
+(with subtle divergences) in each of those files until the Phase 6 review
+pass. They are now defined here once and re-exported so callers can do::
 
-    from tests.conftest import _FixtureTransport, _AsyncContextLock, _make_context
+    from conftest import _FixtureTransport, _AsyncContextLock, _make_context
 
 Pytest auto-loads ``conftest.py`` for the ``tests/`` collection root; no
 ``__init__.py`` is needed. We deliberately keep these as functions/classes
-(not ``@pytest.fixture``s) because two of the three call sites use them
-from ``async`` test bodies that build their own context per scan pass,
-and threading the values through pytest's fixture graph adds noise without
+(not ``@pytest.fixture``s) because several call sites use them from
+``async`` test bodies that build their own context per scan pass, and
+threading the values through pytest's fixture graph adds noise without
 buying isolation.
 """
 
@@ -27,6 +27,7 @@ import httpx
 
 from vhsbot._app_state import BD_CLIENT, BD_DB, BD_DB_LOCK, BD_SETTINGS
 from vhsbot.config import Settings
+from vhsbot.db import Availability
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -103,6 +104,29 @@ class _AsyncContextLock:
 
     async def __aexit__(self, *exc: object) -> None:
         self.exit_count += 1
+
+
+def set_last_availability(
+    conn: sqlite3.Connection, *, kurs_id: int, availability: Availability
+) -> None:
+    """Overwrite the stored ``last_availability`` for one course.
+
+    Test-only seam used by the e2e + db tests to force a belegt -> bookable
+    transition on a course that the fixture reports as bookable. Lifted
+    out of ad-hoc raw SQL so the type system (``Availability`` literal)
+    can catch typos at call sites — a stuck typo would silently make
+    ``classify()`` raise on every future scan.
+
+    Lives in ``tests/conftest.py`` rather than ``src/vhsbot/db.py``
+    because it is exclusively used by tests; production code never
+    overwrites ``last_availability`` directly (it goes through
+    ``upsert_seen_course``).
+    """
+    with conn:
+        conn.execute(
+            "UPDATE seen_courses SET last_availability = ? WHERE kurs_id = ?",
+            (availability, kurs_id),
+        )
 
 
 def _make_context(

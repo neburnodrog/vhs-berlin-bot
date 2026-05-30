@@ -663,19 +663,19 @@ async def test_prune_deletes_directory_exactly_7_days_old(
 
 
 @pytest.mark.parametrize(
-    ("backdate_modifiers", "expected_sends", "rationale"),
+    ("offset_from_cutoff", "expected_sends", "rationale"),
     [
         pytest.param(
-            ("-23 hours", "-59 minutes", "-59 seconds"),
+            "+1 second",
             0,
-            "boundary row at 23h59m59s ago must count toward the 15-msg cap",
-            id="23h59m59s_inside_window_blocks_send",
+            "boundary row 1s ABOVE the cutoff (=inside window) must count toward the 15-msg cap",
+            id="inside_window_blocks_send",
         ),
         pytest.param(
-            ("-24 hours", "-1 second"),
+            "-1 second",
             1,
-            "row at 24h01s ago must NOT count; cap should still allow 1 send",
-            id="24h01s_outside_window_allows_send",
+            "boundary row 1s BELOW the cutoff (=outside window) must NOT count; cap allows 1 send",
+            id="outside_window_allows_send",
         ),
     ],
 )
@@ -684,21 +684,25 @@ async def test_cap_window_boundary(
     conn: sqlite3.Connection,
     monkeypatch: pytest.MonkeyPatch,
     frozen_24h_cutoff: str,
-    backdate_modifiers: tuple[str, ...],
+    offset_from_cutoff: str,
     expected_sends: int,
     rationale: str,
 ) -> None:
     """Pair-test: a row JUST inside the trailing-24h window counts; just outside doesn't.
 
-    Both cases seed 14 fresh priors + 1 backdated boundary row. The cap
-    is 15: with the boundary row inside, the cap is hit and a fresh
-    match must NOT dispatch; with the boundary row outside, the cap
-    counter sees 14 and the fresh match DOES dispatch.
+    Both cases seed 14 fresh priors + 1 boundary row positioned relative
+    to the frozen cutoff string. The cap is 15: with the boundary row
+    inside, the cap is hit and a fresh match must NOT dispatch; with the
+    boundary row outside, the cap counter sees 14 and the fresh match
+    DOES dispatch.
 
-    The ``frozen_24h_cutoff`` fixture pins ``jobs._since_24h_iso`` so
-    SQLite-side timestamps and the Python-side cutoff share a single
-    reference instant — no wall-clock drift between the two can flake
-    the boundary.
+    Crucially, both sides of the ``>=`` comparison derive from the same
+    instant: the ``frozen_24h_cutoff`` fixture pins ``jobs._since_24h_iso``
+    to a SQLite-snapshotted reference, AND the boundary row's ``sent_at``
+    is computed as ``datetime(cutoff, offset)`` — NOT against
+    ``datetime('now')`` — so wall-clock drift between fixture setup and
+    the test body cannot flip the boundary across the cutoff. Eliminates
+    the sub-second flake window the previous "now"-based test had.
     """
     db.upsert_user_settings(conn, user_id=111, districts=[31])
     db.add_subscription(conn, user_id=111, keyword="Yoga")
@@ -706,10 +710,11 @@ async def test_cap_window_boundary(
     for i in range(14):
         db.record_notification(conn, user_id=111, kurs_id=9000 + i, reason="new")
     db.record_notification(conn, user_id=111, kurs_id=9100, reason="new")
-    modifiers_sql = ", ".join(f"'{m}'" for m in backdate_modifiers)
+    # Position the boundary row relative to the frozen cutoff, NOT to
+    # 'now', so both sides of the comparison share one reference instant.
     conn.execute(
-        f"UPDATE notification_log SET sent_at = datetime('now', {modifiers_sql}) "
-        "WHERE kurs_id = 9100"
+        "UPDATE notification_log SET sent_at = datetime(?, ?) WHERE kurs_id = 9100",
+        (frozen_24h_cutoff, offset_from_cutoff),
     )
     conn.commit()
 
@@ -962,6 +967,84 @@ async def test_daily_scan_skips_new_belegt_courses(
     assert seen.last_notified_at is None, "no notification fired -> last_notified_at stays NULL"
 
 
+async def test_daily_scan_new_belegt_then_back_in_stock_chain(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The full multi-hop chain that the CRITICAL INVARIANT comment promises.
+
+    Pinned at jobs.py:323-329: "even though we skip the send here, we
+    MUST still upsert the course into ``seen_courses`` with
+    ``notified=False``. Otherwise the next scan ... would have no prior
+    state and ``classify()`` would return ``"new"`` AGAIN instead of the
+    correct ``"back_in_stock"``."
+
+    This test exercises the whole loop end-to-end:
+
+    1. Scan 1: snapshot = belegt, user subscribed with matching keyword.
+       Assert 0 sends, ``seen_courses.last_availability == "belegt"``,
+       ``last_notified_at IS NULL``.
+    2. Scan 2: same ``kurs_id``, snapshot flipped to ``">2"``. Assert 1
+       send, ``last_availability == ">2"``, ``last_notified_at IS NOT
+       NULL``, ``notification_log`` row with ``reason="back_in_stock"``.
+
+    If the new+belegt skip path forgot to call ``upsert_seen_course``,
+    scan 2 would re-classify the course as ``"new"`` (no prior row); the
+    fix in jobs.py:330-333 ensures the prior row is there so classify
+    correctly returns ``"back_in_stock"``.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    # --- Scan 1: brand-new course, availability="belegt" ---------------------
+    snapshots_1 = [_snap(kurs_id=12000, title="Yoga sanft", availability="belegt")]
+    _patch_crawl_district(monkeypatch, {31: snapshots_1})
+    ctx_1 = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx_1)
+
+    # No dispatch on scan 1 (new+belegt is silent per the locked policy).
+    ctx_1.bot.send_message.assert_not_called()
+    seen_after_1 = db.get_seen_course(conn, kurs_id=12000)
+    assert seen_after_1 is not None, (
+        "CRITICAL INVARIANT: new+belegt must still be upserted into seen_courses"
+    )
+    assert seen_after_1.last_availability == "belegt"
+    assert seen_after_1.last_notified_at is None
+    # No notification_log row either.
+    log_after_1 = conn.execute("SELECT COUNT(*) FROM notification_log").fetchone()[0]
+    assert log_after_1 == 0
+
+    # --- Scan 2: same kurs_id, availability flipped to ">2" ------------------
+    snapshots_2 = [_snap(kurs_id=12000, title="Yoga sanft", availability=">2")]
+    _patch_crawl_district(monkeypatch, {31: snapshots_2})
+    ctx_2 = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx_2)
+
+    # Exactly one dispatch — classified as back_in_stock.
+    assert ctx_2.bot.send_message.await_count == 1, (
+        f"scan 2 must classify the belegt->bookable transition as 'back_in_stock' "
+        f"and dispatch exactly one message; got "
+        f"{ctx_2.bot.send_message.await_count}. If this is 0, the new+belegt "
+        f"skip path in jobs.py is failing to upsert the prior row."
+    )
+    sent_text = ctx_2.bot.send_message.await_args.kwargs["text"]
+    assert "Back in stock" in sent_text
+
+    seen_after_2 = db.get_seen_course(conn, kurs_id=12000)
+    assert seen_after_2 is not None
+    assert seen_after_2.last_availability == ">2"
+    assert seen_after_2.last_notified_at is not None, (
+        "scan 2 dispatched -> last_notified_at must be set"
+    )
+
+    # notification_log: exactly one row with reason="back_in_stock".
+    rows = conn.execute("SELECT user_id, kurs_id, reason FROM notification_log").fetchall()
+    assert [(r["user_id"], r["kurs_id"], r["reason"]) for r in rows] == [
+        (111, 12000, "back_in_stock")
+    ]
+
+
 async def test_daily_scan_and_backfill_symmetric_on_new_belegt(
     settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -971,32 +1054,64 @@ async def test_daily_scan_and_backfill_symmetric_on_new_belegt(
 
     Before the BLOCKER fix, ``daily_scan`` notified and ``_run_backfill``
     skipped — surfacing the asymmetry called out in the Phase 6 finding.
+    We exercise BOTH paths against the same snapshot in the same test and
+    assert that ``ctx.bot.send_message`` was called the same number of
+    times by both.
     """
-    # Snapshot the daily-scan branch:
+    from unittest.mock import AsyncMock, MagicMock
+
+    from vhsbot import handlers
+
+    snapshots = [_snap(kurs_id=11500, title="Yoga sanft", availability="belegt")]
+
+    # ---- daily_scan branch --------------------------------------------------
     db.upsert_user_settings(conn, user_id=111, districts=[31])
     db.add_subscription(conn, user_id=111, keyword="Yoga")
 
-    snapshots = [_snap(kurs_id=11500, title="Yoga sanft", availability="belegt")]
     _patch_crawl_district(monkeypatch, {31: snapshots})
-    ctx = _make_context(settings=settings, conn=conn)
+    daily_ctx = _make_context(settings=settings, conn=conn)
 
-    await jobs.daily_scan(ctx)
+    await jobs.daily_scan(daily_ctx)
 
-    ctx.bot.send_message.assert_not_called()
+    daily_send_count = daily_ctx.bot.send_message.await_count
+    daily_ctx.bot.send_message.assert_not_called()
     daily_seen = db.get_seen_course(conn, kurs_id=11500)
     assert daily_seen is not None
+    assert daily_seen.last_availability == "belegt"
     assert daily_seen.last_notified_at is None
 
-    # And the backfill path on the same course shape: the _run_backfill
-    # implementation already filters by BOOKABLE_AVAILABILITY (see
-    # handlers._run_backfill); we mirror its decision tree here at the
-    # logic-fragment level rather than spinning up a second pipeline.
-    from vhsbot.db import BOOKABLE_AVAILABILITY
+    # ---- _run_backfill branch -----------------------------------------------
+    # Same snapshot shape, fed through the actual backfill path so we
+    # observe the real filter (not a re-derivation of BOOKABLE_AVAILABILITY
+    # in the test). _run_backfill calls scraper.crawl (NOT crawl_district),
+    # so we patch the public crawl entry point.
+    async def fake_crawl(
+        *, client: object, district_ids: object, sleep_seconds: float
+    ) -> list[CourseSnapshot]:
+        return snapshots
 
-    backfill_would_send = snapshots[0].availability in BOOKABLE_AVAILABILITY
-    daily_would_send = ctx.bot.send_message.await_count > 0
-    assert backfill_would_send == daily_would_send, (
-        "daily_scan and _run_backfill must agree on whether a new+belegt course "
-        f"should dispatch a message; got backfill={backfill_would_send!r}, "
-        f"daily={daily_would_send!r}"
+    monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl)
+
+    # _run_backfill needs an update with a message we can capture replies on.
+    update = MagicMock()
+    update.effective_user.id = 111
+    update.effective_chat.id = 111
+    update.message = MagicMock()
+    update.message.reply_text = AsyncMock()
+
+    backfill_ctx = _make_context(settings=settings, conn=conn, client=object())
+
+    sent_count = await handlers._run_backfill(
+        update=update, context=backfill_ctx, user_id=111, keyword="Yoga"
+    )
+
+    backfill_send_count = backfill_ctx.bot.send_message.await_count
+    assert sent_count == 0, "backfill must report 0 sends for a belegt-only snapshot"
+    backfill_ctx.bot.send_message.assert_not_called()
+
+    # ---- symmetry assertion -------------------------------------------------
+    assert daily_send_count == backfill_send_count, (
+        "daily_scan and _run_backfill must dispatch the same number of messages "
+        f"for a new+belegt course; daily={daily_send_count!r}, "
+        f"backfill={backfill_send_count!r}"
     )

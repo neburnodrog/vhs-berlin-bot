@@ -199,12 +199,6 @@ def _make_update(user_id: int, text: str | None = None) -> MagicMock:
     return update
 
 
-# ``_AsyncContextLock`` + ``_make_context`` live in :mod:`tests.conftest`
-# (imported at the top of this module) — they used to be inlined here, in
-# ``test_jobs.py``, and ``test_e2e.py`` with subtle divergences; the
-# Phase 6 review pass deduplicated them.
-
-
 class TestStartHandler:
     async def test_whitelisted_new_user_kicks_off_conversation(
         self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
