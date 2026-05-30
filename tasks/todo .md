@@ -155,11 +155,20 @@ The original recon in this section was partially wrong. The corrected flow below
 
 ### Phase 6 — tests
 
-- [ ] Capture real HTML fixtures: a form-state GET, one search-result page (district=31, empty search), one paginated result page
-- [ ] `tests/test_scraper.py` — parser unit tests against fixtures (golden-file pattern)
-- [ ] `tests/test_matching.py` — fold/match correctness across umlaut + casing + substring edge cases
-- [ ] `tests/test_diff.py` — classification table-driven tests for all 5 cases from Q4
-- [ ] `tests/test_handlers.py` — minimal smoke test with `pytest-asyncio` + mock Update/Context
+- [x] Capture real HTML fixtures: a form-state GET, one search-result page (district=31, empty search), one paginated result page (done in Phase 2c — `tests/fixtures/form-initial.html` + `search-district-31-page-{1,2}.html`)
+- [x] `tests/test_scraper.py` — parser unit tests against fixtures (golden-file pattern) (Phase 2; +1 in Phase 6 cementing `crawl()` default-None backward-compat)
+- [x] `tests/test_matching.py` — fold/match correctness across umlaut + casing + substring edge cases (Phase 3)
+- [x] `tests/test_diff.py` — classification table-driven tests for all 5 cases from Q4 (Phase 3; +1 in Phase 6 multi-step chain pin)
+- [x] `tests/test_handlers.py` — minimal smoke test with `pytest-asyncio` + mock Update/Context (Phase 4; +4 in Phase 6: whitespace-only `/watch`, unknown `/unwatch`, `/pause` before onboarding, global apology handler)
+- [x] **Phase 6 cross-phase coverage gaps + end-to-end test** (2026-05-30): 19 new tests across 7 files. Groups:
+  - `tests/test_db.py` +2: notified=false preserves last_notified_at; count_notifications_since window boundary.
+  - `tests/test_diff.py` +1: bookable→belegt→bookable multi-step chain.
+  - `tests/test_jobs.py` +8: cap counts 23h59m-old row, ignores 24h01s-old row, exactly-15-priors blocks, two-users-same-course independent log+cap, user-A-at-cap user-B-unaffected, active user with no keywords gets nothing, snapshot_dir created when missing, still_full path upserts without notification.
+  - `tests/test_handlers.py` +4: whitespace-only `/watch` rejects, `/unwatch nonexistent` polite ack, `/pause` without onboarding redirects, handler-exception yields generic apology via `global_error_handler`.
+  - `tests/test_formatting.py` +1: course_card with district=None+date_range=None.
+  - `tests/test_main.py` +1: build_application uses `AIORateLimiter`.
+  - `tests/test_scraper.py` +1: `crawl()` default-None backward-compat.
+  - `tests/test_e2e.py` +1: full pipeline end-to-end across 3 scan passes (new → unchanged → back_in_stock) using `_FixtureTransport` and `Spanisch` keyword (verified to match the captured page-1 fixture; `yoga` did NOT match the fixture so the keyword was swapped). **Phase 6 finding (not fixed): `jobs.daily_scan` notifies on `"new"` regardless of current availability, dispatching even for `belegt` courses — asymmetric with `_run_backfill`'s `BOOKABLE_AVAILABILITY` filter and looser than the locked design's "new+bookable" row.** 169 → 188 tests, ruff lint+format clean.
 
 ### Phase 7 — deploy
 

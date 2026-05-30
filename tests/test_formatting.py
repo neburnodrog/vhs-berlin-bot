@@ -98,3 +98,39 @@ def test_course_card_button_links_to_detail_url() -> None:
     assert len(rows) == 1
     assert len(rows[0]) == 1
     assert rows[0][0].url == detail_url
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 addition: minimal course data
+# ---------------------------------------------------------------------------
+
+
+def test_course_card_with_minimal_course_data() -> None:
+    """A ``CourseSnapshot`` with ``district=None`` and ``date_range=None``
+    must format without crashing.
+
+    Pins the optional-field branches in :func:`course_card`: the Bezirk/
+    Termin lines must be omitted when their values are None, rather than
+    rendering "Bezirk: None" or raising. The Plaetze + title + course-number
+    lines remain because they are non-optional in CourseSnapshot.
+    """
+    minimal = _course(district=None, date_range=None)
+    text, markup = course_card(
+        minimal,
+        matched_keywords=["Yoga"],
+        reason="new",
+        detail_url="https://example.test/x",
+    )
+
+    assert isinstance(text, str)
+    assert text  # non-empty
+    # Required fields still in output.
+    assert "Yoga sanft" in text or "Yoga" in text
+    # Optional-field labels must NOT leak with a "None" string.
+    assert "Bezirk: None" not in text
+    assert "Termin: None" not in text
+    # Empty-string for the missing fields must also not produce blank label lines.
+    assert "Bezirk: \n" not in text
+    assert "Termin: \n" not in text
+    # The keyboard still resolves cleanly.
+    assert markup.inline_keyboard[0][0].url == "https://example.test/x"

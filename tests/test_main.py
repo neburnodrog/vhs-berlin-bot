@@ -93,3 +93,22 @@ def test_build_application_registers_all_command_handlers(settings: Settings) ->
     }
     missing = expected - found_commands
     assert not missing, f"missing command handlers: {sorted(missing)}"
+
+
+def test_build_application_uses_aiorate_limiter(settings: Settings) -> None:
+    """``AIORateLimiter`` must be the Application's outbound throttle.
+
+    Pins the rate-limiter wiring in :func:`vhsbot.main.build_application`:
+    the docstring says PTB's ``AIORateLimiter`` throttles every outbound
+    request, and a regression here (e.g. ``.rate_limiter(None)`` slipping
+    in) would silently lift the rate limit. PTB v22 exposes the configured
+    limiter on ``application.bot.rate_limiter``.
+    """
+    from telegram.ext import AIORateLimiter
+
+    app = main.build_application(settings)
+    rate_limiter = app.bot.rate_limiter
+    assert rate_limiter is not None, "AIORateLimiter must be registered on the Application"
+    assert isinstance(rate_limiter, AIORateLimiter), (
+        f"expected AIORateLimiter, got {type(rate_limiter).__name__}: {rate_limiter!r}"
+    )

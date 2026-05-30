@@ -672,3 +672,269 @@ async def test_prune_deletes_directory_exactly_7_days_old(
     assert not (settings.snapshot_dir / seven_days.isoformat()).exists(), (
         "directory exactly 7 days old must be pruned (weekly cleanup semantics)"
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 additions: cap-window boundary + multi-user + still_full + dir create
+# ---------------------------------------------------------------------------
+
+
+async def test_cap_counts_row_at_23h59m_ago_in_window(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A prior notification at 23h59m59s ago MUST count toward the cap.
+
+    Seeds 14 fresh priors + 1 prior backdated to ``now - 23h59m59s``
+    (i.e. just inside the trailing-24h window). The cap is 15, so with
+    15 priors already inside the window, a single new match must NOT
+    dispatch — proving the boundary row is included.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    # 14 fresh notifications + 1 just inside the 24h boundary.
+    for i in range(14):
+        db.record_notification(conn, user_id=111, kurs_id=9000 + i, reason="new")
+    db.record_notification(conn, user_id=111, kurs_id=9100, reason="new")
+    conn.execute(
+        "UPDATE notification_log SET "
+        "sent_at = datetime('now', '-23 hours', '-59 minutes', '-59 seconds') "
+        "WHERE kurs_id = 9100"
+    )
+    conn.commit()
+
+    snapshots = [_snap(kurs_id=5000, title="Yoga sanft", availability=">2")]
+    _patch_crawl_district(monkeypatch, {31: snapshots})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    assert ctx.bot.send_message.await_count == 0, (
+        "boundary row at 23h59m59s ago must count toward the 15-msg cap"
+    )
+
+
+async def test_cap_ignores_row_24h01s_ago(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A prior notification at 24h00m01s ago must NOT count toward the cap.
+
+    Seeds 14 fresh priors + 1 backdated just outside the 24h window.
+    The cap-counter must return 14, leaving room for 1 in-scan send.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    for i in range(14):
+        db.record_notification(conn, user_id=111, kurs_id=9000 + i, reason="new")
+    db.record_notification(conn, user_id=111, kurs_id=9101, reason="new")
+    conn.execute(
+        "UPDATE notification_log SET "
+        "sent_at = datetime('now', '-24 hours', '-1 second') "
+        "WHERE kurs_id = 9101"
+    )
+    conn.commit()
+
+    snapshots = [_snap(kurs_id=5001, title="Yoga sanft", availability=">2")]
+    _patch_crawl_district(monkeypatch, {31: snapshots})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    assert ctx.bot.send_message.await_count == 1, (
+        "row at 24h01s ago must NOT count; cap should still allow 1 send"
+    )
+
+
+async def test_cap_exactly_at_15_priors_blocks_all_new_matches(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With 15 priors already in-window, every fresh match is blocked."""
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    for i in range(15):
+        db.record_notification(conn, user_id=111, kurs_id=9000 + i, reason="new")
+
+    snapshots = [_snap(kurs_id=5000 + i, title=f"Yoga {i}", availability=">2") for i in range(5)]
+    _patch_crawl_district(monkeypatch, {31: snapshots})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    assert ctx.bot.send_message.await_count == 0, "15 priors == cap; no fresh matches must dispatch"
+
+
+async def test_two_users_match_same_course_each_logged_with_own_cap(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two users with overlapping keywords get independent log rows + caps.
+
+    One course matches both; each user receives exactly one message and
+    each user's notification_log row is recorded independently.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+    db.upsert_user_settings(conn, user_id=222, districts=[31])
+    db.add_subscription(conn, user_id=222, keyword="Yoga")
+
+    snapshots = [_snap(kurs_id=6000, title="Yoga sanft", availability=">2")]
+    _patch_crawl_district(monkeypatch, {31: snapshots})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    chat_ids = sorted(call.kwargs["chat_id"] for call in ctx.bot.send_message.await_args_list)
+    assert chat_ids == [111, 222]
+
+    # Each user has their own notification_log row.
+    rows = conn.execute(
+        "SELECT user_id FROM notification_log WHERE kurs_id = 6000 AND reason = 'new' "
+        "ORDER BY user_id"
+    ).fetchall()
+    assert [r["user_id"] for r in rows] == [111, 222]
+
+
+async def test_user_a_at_cap_user_b_unaffected(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """User A is at cap; user B has 0 priors. Same course matches both.
+
+    User A receives nothing; user B receives exactly one message. Pins
+    that the cap is applied PER-USER, never globally.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+    db.upsert_user_settings(conn, user_id=222, districts=[31])
+    db.add_subscription(conn, user_id=222, keyword="Yoga")
+
+    # User A: 15 priors -> at cap.
+    for i in range(15):
+        db.record_notification(conn, user_id=111, kurs_id=9000 + i, reason="new")
+    # User B: 0 priors.
+
+    snapshots = [_snap(kurs_id=6500, title="Yoga sanft", availability=">2")]
+    _patch_crawl_district(monkeypatch, {31: snapshots})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    chat_ids = [call.kwargs["chat_id"] for call in ctx.bot.send_message.await_args_list]
+    assert chat_ids == [222], (
+        f"user A at cap must receive 0; user B must receive 1; got chat_ids={chat_ids}"
+    )
+
+
+async def test_active_user_with_no_keywords_receives_nothing(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An onboarded user with no /watch subscriptions gets no notifications.
+
+    The user has ``user_settings`` (so they're "active" / non-paused) but
+    zero rows in ``subscriptions``. The fan-out must skip them entirely
+    even when courses are streaming through the scan.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    # NO add_subscription call.
+
+    snapshots = [
+        _snap(kurs_id=7000 + i, title=f"Some course {i}", availability=">2") for i in range(3)
+    ]
+    _patch_crawl_district(monkeypatch, {31: snapshots})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    ctx.bot.send_message.assert_not_called()
+
+
+async def test_snapshot_dir_created_when_missing(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """If ``settings.snapshot_dir`` doesn't exist, the scan creates it.
+
+    Pins the ``mkdir(parents=True, exist_ok=True)`` contract in
+    ``_make_snapshot_writer``: a fresh deploy where the volume mount
+    is empty must NOT crash on first scan.
+    """
+    # Replace snapshot_dir with a path that does NOT exist.
+    fresh_dir = tmp_path / "definitely-fresh"
+    assert not fresh_dir.exists()
+    # Settings is frozen; build a fresh instance with the new dir.
+    settings = Settings(
+        telegram_bot_token=settings.telegram_bot_token,
+        allowed_user_ids=settings.allowed_user_ids,
+        scan_time=settings.scan_time,
+        tz=settings.tz,
+        db_path=settings.db_path,
+        snapshot_dir=fresh_dir,
+        log_level=settings.log_level,
+        scrape_sleep_seconds=settings.scrape_sleep_seconds,
+    )
+
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+    _patch_crawl_district(monkeypatch, {31: [_snap(kurs_id=8000, availability=">2")]})
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    from datetime import datetime as _dt
+
+    today = _dt.now(settings.tz).date().isoformat()
+    day_dir = fresh_dir / today
+    assert day_dir.exists(), f"scan must create the date-dir under fresh_dir; got {day_dir!r}"
+    # And it actually has the written file.
+    files = list(day_dir.iterdir())
+    assert files, "today's directory must contain the captured-page file"
+
+
+async def test_classify_still_full_path_upserts_without_notification(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``"still_full"`` (belegt -> belegt) refreshes last_seen_at, no notify.
+
+    Pins that the still_full branch:
+      - DOES update ``last_seen_at``
+      - Does NOT dispatch a message
+      - Does NOT clobber ``last_notified_at`` back to NULL
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    # Seed: course previously seen as "belegt" with a non-NULL last_notified_at
+    # (simulating a prior back_in_stock notification that has since lapsed).
+    db.upsert_seen_course(
+        conn, _snap(kurs_id=9500, title="Yoga sanft", availability="belegt"), notified=True
+    )
+    before = db.get_seen_course(conn, kurs_id=9500)
+    assert before is not None
+    assert before.last_notified_at is not None
+    original_notified = before.last_notified_at
+    # Backdate last_seen_at so we can prove scan touched it.
+    conn.execute(
+        "UPDATE seen_courses SET last_seen_at = datetime('now', '-1 minute') WHERE kurs_id = 9500"
+    )
+    conn.commit()
+    backdated = db.get_seen_course(conn, kurs_id=9500)
+    assert backdated is not None
+    backdated_last_seen = backdated.last_seen_at
+
+    # Crawl returns the same course, still "belegt" -> still_full path.
+    _patch_crawl_district(
+        monkeypatch, {31: [_snap(kurs_id=9500, title="Yoga sanft", availability="belegt")]}
+    )
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    # No notification fired.
+    ctx.bot.send_message.assert_not_called()
+    after = db.get_seen_course(conn, kurs_id=9500)
+    assert after is not None
+    # last_seen_at advanced.
+    assert after.last_seen_at > backdated_last_seen, "still_full branch must refresh last_seen_at"
+    # last_notified_at preserved (not clobbered to NULL).
+    assert after.last_notified_at == original_notified, (
+        "still_full branch must NOT overwrite last_notified_at"
+    )

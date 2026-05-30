@@ -269,3 +269,67 @@ def test_count_notifications_since(conn: sqlite3.Connection) -> None:
     cutoff = conn.execute(f"SELECT {since_today}").fetchone()[0]
     assert db.count_notifications_since(conn, user_id=42, since=cutoff) == 2
     assert db.count_notifications_since(conn, user_id=99, since=cutoff) == 0
+
+
+# --- Phase 6 additions: seen_courses + notification window edge cases ------
+
+
+def test_upsert_seen_course_with_notified_false_preserves_existing_last_notified_at(
+    conn: sqlite3.Connection,
+) -> None:
+    """A no-notify upsert MUST keep the previous last_notified_at, not NULL it.
+
+    Regression pin for the "still_full" branch of daily_scan: when a course
+    that was previously notified-on appears again unchanged, we refresh
+    ``last_seen_at`` but must NOT clobber ``last_notified_at`` back to NULL.
+    """
+    # First write: notified=True sets the timestamp.
+    db.upsert_seen_course(conn, _snap(kurs_id=2000, availability=">2"), notified=True)
+    first = db.get_seen_course(conn, kurs_id=2000)
+    assert first is not None
+    original_last_notified = first.last_notified_at
+    assert original_last_notified is not None
+
+    # Second write: notified=False on the same kurs_id — last_notified_at
+    # must be preserved (not overwritten, not NULLed).
+    db.upsert_seen_course(conn, _snap(kurs_id=2000, availability="belegt"), notified=False)
+    updated = db.get_seen_course(conn, kurs_id=2000)
+    assert updated is not None
+    assert updated.last_notified_at == original_last_notified, (
+        "notified=False upsert must NOT clobber a previously-set last_notified_at"
+    )
+    # And the other fields advanced as expected.
+    assert updated.last_availability == "belegt"
+
+
+def test_count_notifications_since_excludes_rows_outside_window(
+    conn: sqlite3.Connection,
+) -> None:
+    """Boundary correctness for the cap-counter helper.
+
+    Insert one row whose ``sent_at`` is JUST inside the trailing-24h window
+    and another whose ``sent_at`` is JUST outside it. The counter must
+    return exactly 1 when queried against a cutoff equal to "now - 24h".
+    """
+    # Row inside the window: 23h59m59s ago.
+    db.record_notification(conn, user_id=42, kurs_id=3000, reason="new")
+    conn.execute(
+        "UPDATE notification_log SET "
+        "sent_at = datetime('now', '-23 hours', '-59 minutes', '-59 seconds') "
+        "WHERE kurs_id = 3000"
+    )
+    # Row outside the window: 24h00m01s ago.
+    db.record_notification(conn, user_id=42, kurs_id=3001, reason="new")
+    conn.execute(
+        "UPDATE notification_log SET "
+        "sent_at = datetime('now', '-24 hours', '-1 second') "
+        "WHERE kurs_id = 3001"
+    )
+    conn.commit()
+
+    cutoff = conn.execute("SELECT strftime('%Y-%m-%d %H:%M:%S', 'now', '-24 hours')").fetchone()[0]
+    count = db.count_notifications_since(conn, user_id=42, since=cutoff)
+    assert count == 1, (
+        f"count_notifications_since must include the in-window row and exclude "
+        f"the just-out-of-window row; got {count}"
+    )

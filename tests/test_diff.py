@@ -89,3 +89,29 @@ def test_classify_raises_on_unknown_previous_availability() -> None:
 def test_classify_result_type_is_reexported() -> None:
     # Callers should be able to import the literal alias from the module.
     assert hasattr(diff, "ClassifyResult")
+
+
+def test_classify_back_in_stock_after_bookable_to_belegt_to_bookable_chain() -> None:
+    """Multi-step transition chain: bookable -> belegt -> bookable.
+
+    Documents that ``classify`` is stateless: each call sees only the
+    current snapshot vs the most recent stored row. A three-step chain
+    must produce exactly: "new" (no previous), then "unchanged" (bookable
+    -> belegt; the locked policy stays silent on going-out-of-stock),
+    then "back_in_stock" (belegt -> bookable). The middle step's
+    "unchanged" -- not "still_full" -- is the critical pin: a course that
+    is going OUT of stock must NOT register as "still_full" (that's
+    reserved for belegt -> belegt).
+    """
+    # Step 1: previously unseen -> "new".
+    step_1 = diff.classify(_current(">2"), None)
+    assert step_1 == "new"
+
+    # Step 2: previously seen as ">2", now "belegt" -> "unchanged"
+    # (locked policy: do NOT notify on going-out-of-stock).
+    step_2 = diff.classify(_current("belegt"), _previous(">2"))
+    assert step_2 == "unchanged"
+
+    # Step 3: previously seen as "belegt", now ">2" -> "back_in_stock".
+    step_3 = diff.classify(_current(">2"), _previous("belegt"))
+    assert step_3 == "back_in_stock"

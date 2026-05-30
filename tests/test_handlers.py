@@ -767,3 +767,128 @@ class TestScanCommand:
         assert ctx.bot_data.get("scan_running") is False, (
             "scan_running flag must be cleared by try/finally even on exception"
         )
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 additions: /watch + /unwatch + /pause edge cases + error handler
+# ---------------------------------------------------------------------------
+
+
+class TestWatchEdgeCases:
+    async def test_watch_with_whitespace_only_arg_replies_usage(
+        self, settings: Settings, conn: sqlite3.Connection
+    ) -> None:
+        """``/watch    `` (only whitespace) replies with usage hint.
+
+        Critically: no subscription must be added. ``context.args`` from PTB
+        will be a list of whitespace-only tokens; the handler must strip
+        and reject empty results.
+        """
+        db.upsert_user_settings(conn, user_id=111, districts=[31])
+        update = _make_update(user_id=111)
+        # Simulate PTB delivering whitespace tokens for `/watch    `.
+        ctx = _make_context(settings=settings, conn=conn, client=object(), args=["   ", "  "])
+
+        await handlers.watch(update, ctx)
+
+        text = update.message.reply_text.await_args.args[0]
+        assert "Usage" in text or "/watch" in text
+        # NO subscription added.
+        assert db.list_subscriptions(conn, user_id=111) == []
+
+
+class TestUnwatchHandler:
+    async def test_unwatch_unknown_keyword_acknowledges_was_not_watching(
+        self, settings: Settings, conn: sqlite3.Connection
+    ) -> None:
+        """``/unwatch nonexistent`` for a keyword not in the user's subs.
+
+        Replies politely without raising; the reply must convey "was not
+        watching" so the user knows the no-op happened.
+        """
+        db.upsert_user_settings(conn, user_id=111, districts=[31])
+        update = _make_update(user_id=111)
+        ctx = _make_context(settings=settings, conn=conn, client=object(), args=["nonexistent"])
+
+        await handlers.unwatch(update, ctx)
+
+        text = update.message.reply_text.await_args.args[0]
+        # "Was not watching 'nonexistent'." in the current impl.
+        assert "not watching" in text.lower() or "was not" in text.lower()
+
+
+class TestPauseWithoutOnboarding:
+    async def test_pause_without_onboarding_redirects_to_start(
+        self, settings: Settings, conn: sqlite3.Connection
+    ) -> None:
+        """``/pause`` from a user with no ``user_settings`` row redirects to /start.
+
+        Pin that the handler short-circuits cleanly when called before
+        onboarding — does NOT silently insert a paused-flag row, does NOT
+        crash on the missing row.
+        """
+        # No upsert_user_settings call; user has no row.
+        assert db.get_user_settings(conn, user_id=111) is None
+
+        update = _make_update(user_id=111)
+        ctx = _make_context(settings=settings, conn=conn, client=object())
+
+        await handlers.pause(update, ctx)
+
+        text = update.message.reply_text.await_args.args[0]
+        assert "/start" in text
+        # Did NOT create a settings row.
+        assert db.get_user_settings(conn, user_id=111) is None
+
+
+class TestGlobalErrorHandlerApology:
+    async def test_handler_exception_yields_generic_apology(
+        self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A handler raising must (a) propagate (no try/except in the handler
+        itself), (b) the dedicated ``global_error_handler`` must send a
+        generic apology when invoked by PTB's plumbing.
+
+        We exercise both halves: first, that ``start()`` does NOT swallow
+        a DB-layer error, and second, that ``global_error_handler`` sends
+        the apology when invoked directly with that same error.
+        """
+
+        # ----- (a) handler does not silently swallow -----------------
+        def boom_get_user_settings(*a: object, **kw: object) -> object:
+            raise RuntimeError("simulated DB outage")
+
+        monkeypatch.setattr(handlers, "get_user_settings", boom_get_user_settings)
+
+        update = _make_update(user_id=111)
+        ctx = _make_context(settings=settings, conn=conn, client=object())
+
+        with pytest.raises(RuntimeError, match="simulated DB outage"):
+            await handlers.start(update, ctx)
+
+        # ----- (b) global_error_handler sends the generic apology ----
+        # Build a minimal real Update so the ``isinstance(update, Update)``
+        # branch fires (the production path uses ``effective_chat`` from it).
+        chat = Chat(id=111, type="private")
+        real_user = User(id=111, first_name="Test", is_bot=False)
+        msg = Message(
+            message_id=1, date=datetime(2026, 5, 30), chat=chat, from_user=real_user, text="/start"
+        )
+        real_update = Update(update_id=1, message=msg)
+
+        apology_ctx = MagicMock()
+        apology_ctx.bot = MagicMock()
+        apology_ctx.bot.send_message = AsyncMock()
+        apology_ctx.error = RuntimeError("simulated DB outage")
+
+        await handlers.global_error_handler(real_update, apology_ctx)
+
+        apology_ctx.bot.send_message.assert_awaited_once()
+        sent = apology_ctx.bot.send_message.await_args
+        # The chat we'd send the apology to is the same chat the failing
+        # update came from.
+        assert sent.kwargs["chat_id"] == 111
+        # And the body conveys a generic apology rather than the raw error.
+        assert "wrong" in sent.kwargs["text"].lower() or "try again" in sent.kwargs["text"].lower()
+        # Make sure the internal RuntimeError isn't leaked verbatim.
+        assert "simulated DB outage" not in sent.kwargs["text"]

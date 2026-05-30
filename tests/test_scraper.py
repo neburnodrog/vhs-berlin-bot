@@ -316,6 +316,29 @@ async def test_crawl_district_omits_raw_html_callback_by_default_remains_backwar
     assert len(snapshots) == 30
 
 
+async def test_crawl_omits_raw_html_callback_by_default_remains_backward_compat() -> None:
+    """Phase 6 explicit pin: ``crawl`` (the multi-district wrapper) default-None.
+
+    Companion to the ``crawl_district`` version. Callers can invoke the
+    public ``crawl`` API without ``raw_html_callback`` and get the same
+    return-value shape as before Phase 5 introduced the kwarg. The
+    default-None case must not perform any I/O the caller didn't ask for
+    (such as snapshot writes), and must not crash when the kwarg is
+    absent.
+    """
+    transport = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        snapshots = await crawl(
+            client=client,
+            district_ids={31},
+            sleep_seconds=0,
+        )
+
+    # Same shape as test_crawl_single_district_returns_all_snapshots:
+    # 20 unique kurs_ids from page-1 + page-2 (page_2_stripped dedup'd out).
+    assert len(snapshots) == 20
+
+
 async def test_crawl_single_district_returns_all_snapshots() -> None:
     """A single-district crawl returns every unique row across paginated pages.
 
