@@ -109,7 +109,7 @@ The original recon in this section was partially wrong. The corrected flow below
 
 - [x] **Phase 2a — parser** (`src/vhsbot/parser.py`): `parse_form_state`, `parse_results_page`, `has_next_page`. Pure functions over raw response bytes; decoded inside the parser with `windows-1252`. 11 tests.
 - [x] **Phase 2b — HTTP orchestrator** (`src/vhsbot/scraper.py`): `crawl_district(client, district_checkbox_index, sleep_seconds)` drives the full GET-form → POST-Erweitert → POST-search → POST-next-page loop. State re-parsed from every response. Sleep between requests configurable. Dependency-injected `httpx.AsyncClient` (production wires UA + cookies; tests inject `_FixtureTransport` replaying captured HTML). 3 tests; verified the orchestrator (a) uses the real `btnSearch=Suchen` submit, not `__EVENTTARGET`, (b) sends district checkbox by index, (c) paginates via image-input coords with refreshed `__EVENTVALIDATION`, (d) stops when `has_next_page` returns false. Total 37 tests, ruff clean.
-- [ ] **Phase 2c — district map + crawl wrapper**: parse `form-initial.html` once at startup to build `dict[int, int]` (district_id → checkbox_index). Add `crawl(client, district_ids, sleep_seconds)` that loops `crawl_district` across districts and dedups by `kurs_id`. Persist raw response HTML to `/data/snapshots/YYYY-MM-DD/<district>-page-<N>.html` for replay debugging (auto-prune >7 days).
+- [x] **Phase 2c — district map + crawl wrapper**: `parse_district_map(html_bytes)` reads the GET response and yields `district_id → checkbox_index` (15 entries, anchor 31 → 5 verified). `crawl(client, district_ids, sleep_seconds)` does one initial GET to build the map, validates ids (raises `ValueError` listing unknown ids), then loops `crawl_district` per district in sorted order and dedups snapshots by `kurs_id` (first-occurrence wins). 3 new tests; 40 total, ruff clean. **Snapshot persistence deferred to Phase 5** — it is an operational concern coupled to the daily scheduler, not the pure HTTP orchestrator.
 
 ### Phase 3 — matching + diff
 
@@ -136,6 +136,7 @@ The original recon in this section was partially wrong. The corrected flow below
 - [ ] `src/vhsbot/jobs.py`:
   - `daily_scan(context)` — union all users' districts; `scraper.crawl()`; classify each course; for each (user, course) pair where the course matches a user's keyword AND classification is `new` or `back_in_stock` (subject to user's `paused` and `include_waitlist` flags), send a notification (cap 15/user/day)
   - Update `seen_courses` with latest availability snapshot
+  - Persist raw response HTML to `/data/snapshots/YYYY-MM-DD/<district>-page-<N>.html` for replay debugging (moved here from Phase 2c — belongs with the scheduler that owns date-keyed paths)
   - Snapshot pruning (delete `/data/snapshots/*` older than 7 days)
 - [ ] `src/vhsbot/formatting.py`:
   - `course_card(course, matched_kws, reason) -> tuple[str, InlineKeyboardMarkup]` — Markdown V2 with `escape_markdown(...)`

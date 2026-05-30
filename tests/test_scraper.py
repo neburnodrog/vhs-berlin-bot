@@ -12,8 +12,9 @@ import re
 from pathlib import Path
 
 import httpx
+import pytest
 
-from vhsbot.scraper import crawl_district
+from vhsbot.scraper import crawl, crawl_district, parse_district_map
 
 FIXTURES = Path(__file__).parent / "fixtures"
 _NEXT_BTN_INPUT_RE = re.compile(
@@ -115,3 +116,44 @@ async def test_next_page_post_uses_image_input_coordinates() -> None:
     assert b"ctl01%24ctl04.x=" in first_next
     assert b"ctl01%24ctl04.y=" in first_next
     assert b"__EVENTVALIDATION=" in first_next  # CourseList.aspx responses include it
+
+
+def test_parse_district_map_extracts_known_districts() -> None:
+    html_bytes = (FIXTURES / "form-initial.html").read_bytes()
+    district_map = parse_district_map(html_bytes)
+
+    # Anchor: Mitte (district id 31) is at checkbox index 5.
+    assert district_map[31] == 5
+    # Berlin has 12 admin districts plus VHS-internal cross-district rows.
+    assert len(district_map) >= 12
+
+
+async def test_crawl_two_districts_dedups_by_kurs_id() -> None:
+    transport = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        # 31=Mitte (index 5) and 32=Friedrichshain-Kreuzberg (index 2). The
+        # transport replays the same captured pages for both districts, so
+        # every snapshot from district 32 overlaps with district 31's.
+        snapshots = await crawl(
+            client=client,
+            district_ids={31, 32},
+            sleep_seconds=0,
+        )
+
+    # The dedup contract: every kurs_id appears at most once in the result.
+    kurs_ids = [s.kurs_id for s in snapshots]
+    assert len(kurs_ids) == len(set(kurs_ids))
+    # Page 1 + page 2 fixtures have 20 distinct kurs_ids together; dedup
+    # collapses the duplicated cross-district rows down to that set.
+    assert len(snapshots) == 20
+
+
+async def test_crawl_unknown_district_raises_value_error() -> None:
+    transport = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        with pytest.raises(ValueError, match="99999"):
+            await crawl(
+                client=client,
+                district_ids={99999},
+                sleep_seconds=0,
+            )
