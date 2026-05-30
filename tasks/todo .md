@@ -125,13 +125,17 @@ The original recon in this section was partially wrong. The corrected flow below
 
 ### Phase 4 — handlers + onboarding
 
-- [ ] `src/vhsbot/handlers.py`:
-  - `start(update, context)` — whitelist check; if known user, greet warmly + show current subs; if new user, kick off `ConversationHandler`
-  - District inline keyboard (multi-select via callback_query, 4 cols × 3 rows + "Alle" + "Fertig" buttons)
-  - After districts confirmed: prompt for keyword text
-  - Save subscription + run on-demand backfill (call `scraper.crawl(districts)` filtered to user's brand-new keyword, send up to 15 bookable matches as individual messages)
-  - `/list`, `/watch <kw>`, `/unwatch <kw>`, `/districts`, `/pause`, `/resume`, `/scan` (admin-only manual trigger), `/help`
-- [ ] Whitelist middleware: reject any update from user_id not in `ALLOWED_USER_IDS` with a polite "this is a private bot" message
+- [x] `src/vhsbot/handlers.py`:
+  - [x] `start(update, context)` — whitelist check; if known user, greet warmly + show current subs; if new user, kick off `ConversationHandler`
+  - [x] District inline keyboard (multi-select via callback_query, **3 cols** × N rows + "Alle" + "Fertig" buttons; the spec wrote 4 cols × 3 rows but the design table says 3 cols by N rows — went with 3 to match the table)
+  - [x] After districts confirmed: prompt for keyword text
+  - [x] Save subscription + run on-demand backfill (call `scraper.crawl(districts)` filtered to user's brand-new keyword, send up to 15 bookable matches as individual messages, log each to `notification_log` with reason="backfill")
+  - [x] `/list`, `/watch <kw>`, `/unwatch <kw>`, `/districts`, `/pause`, `/resume`, `/help` all implemented
+  - [x] `/scan` stubbed — sends ack + logs; the actual JobQueue wiring lands in Phase 5 (TODO marker in code)
+- [x] Whitelist middleware: `@whitelist_only` decorator wraps every handler; rejects non-whitelisted updates with a polite message and `ConversationHandler.END`
+- [x] `src/vhsbot/main.py` bootstrap: `Application.builder().post_init/post_shutdown(...)`, shared `httpx.AsyncClient` + sqlite connection live on `application.bot_data`, `run_polling()`. The Phase 5 daily-scan job will hook onto the existing `Application.job_queue`.
+- [x] **Decision pinned**: on-demand backfill blocks the handler (option A). Documented in `src/vhsbot/main.py` module docstring so Phase 5 does not accidentally revisit it.
+- **Deferred to Phase 5**: cross-day 15-msg/user cap (would query `notification_log` with a date window), and the actual daily scan loop. Tests: 25 added (18 pure-function + 7 handler-smoke). Total: 120 tests, ruff lint+format clean.
 
 ### Phase 5 — daily job
 
