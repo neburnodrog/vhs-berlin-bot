@@ -38,6 +38,7 @@ from telegram.ext import AIORateLimiter, Application
 from vhsbot import db, handlers
 from vhsbot._app_state import BD_CLIENT, BD_DB, BD_DB_LOCK, BD_SETTINGS
 from vhsbot.config import Settings, load_settings
+from vhsbot.jobs import daily_scan
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,16 @@ def run() -> None:
     )
     application.bot_data[BD_SETTINGS] = settings
     handlers.register_handlers(application)
+
+    # Schedule the daily scan. PTB v22's JobQueue.run_daily takes a
+    # ``datetime.time``; attach the configured tz directly so APScheduler
+    # interprets ``settings.scan_time`` as local wall-clock time.
+    if application.job_queue is not None:  # pragma: no branch
+        application.job_queue.run_daily(
+            daily_scan,
+            time=settings.scan_time.replace(tzinfo=settings.tz),
+            name="vhsbot-daily-scan",
+        )
 
     application.run_polling()
 

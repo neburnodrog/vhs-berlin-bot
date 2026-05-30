@@ -140,16 +140,17 @@ The original recon in this section was partially wrong. The corrected flow below
 
 ### Phase 5 — daily job
 
-- [ ] `src/vhsbot/jobs.py`:
-  - `daily_scan(context)` — union all users' districts; `scraper.crawl()`; classify each course; for each (user, course) pair where the course matches a user's keyword AND classification is `new` or `back_in_stock` (subject to user's `paused` and `include_waitlist` flags), send a notification (cap 15/user/day)
-  - Update `seen_courses` with latest availability snapshot
-  - Persist raw response HTML to `/data/snapshots/YYYY-MM-DD/<district>-page-<N>.html` for replay debugging (moved here from Phase 2c — belongs with the scheduler that owns date-keyed paths)
-  - Snapshot pruning (delete `/data/snapshots/*` older than 7 days)
-- [ ] `src/vhsbot/formatting.py`:
-  - `course_card(course, matched_kws, reason) -> tuple[str, InlineKeyboardMarkup]` — Markdown V2 with `escape_markdown(...)`
-- [ ] `src/vhsbot/main.py`:
-  - Build `Application`, wire handlers, register `ConversationHandler`, register `job_queue.run_daily(daily_scan, time=SCAN_TIME, tzinfo=Europe/Berlin)`
-  - Run `application.run_polling()` (no webhook in v1)
+- [x] `src/vhsbot/jobs.py`:
+  - [x] `daily_scan(context)` — union all users' districts; `scraper.crawl()`; classify each course; for each (user, course) pair where the course matches a user's keyword AND classification is `new` or `back_in_stock` (subject to user's `paused` and `include_waitlist` flags), send a notification (cap 15/user/day, cross-day window = trailing 24h)
+  - [x] Update `seen_courses` with latest availability snapshot via new `upsert_seen_course(conn, snapshot, notified=...)` — every returned course is upserted, with `last_notified_at` only bumped when notified=True
+  - [x] Persist raw response HTML to `<snapshot_dir>/YYYY-MM-DD/<district>-page-<N>.html` via the new `raw_html_callback` parameter on `scraper.crawl` / `scraper.crawl_district` (Phase 2c "deferred to Phase 5" — done here)
+  - [x] Snapshot pruning (delete `<snapshot_dir>/<YYYY-MM-DD>` dirs older than 7 days; non-date-named dirs left alone)
+  - [x] Top-level try/except re-raises so PTB's global error handler sees the failure
+- [x] `src/vhsbot/formatting.py`:
+  - [x] `course_card(course, matched_kws, reason, detail_url) -> tuple[str, InlineKeyboardMarkup]` — Markdown V2 via PTB's `escape_markdown(version=2)`. `reason ∈ {"new","back_in_stock","backfill"}` drives a prefix line; the old `handlers.build_course_message` is deleted and `_run_backfill` now calls `course_card(..., reason="backfill")`.
+- [x] `src/vhsbot/main.py`:
+  - [x] `job_queue.run_daily(daily_scan, time=settings.scan_time.replace(tzinfo=settings.tz), name="vhsbot-daily-scan")` registered after `register_handlers`.
+- **Tests added in Phase 5**: 4 `test_formatting.py` (reason prefix x3 + MD-V2 escape + button URL), 9 `test_jobs.py` (skip empty / classify / fanout / paused / cap / unconditional upsert / snapshot persistence / pruning + exception re-raise), 2 `test_scraper.py` (callback invocation per page + backward-compat default-None). Plus 3 in `test_db.py` for `upsert_seen_course`. 142 → 157 tests, ruff clean.
 
 ### Phase 6 — tests
 

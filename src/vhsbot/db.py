@@ -271,6 +271,77 @@ def mark_notified(conn: sqlite3.Connection, *, kurs_id: int) -> None:
         )
 
 
+def upsert_seen_course(
+    conn: sqlite3.Connection, snapshot: CourseSnapshot, *, notified: bool
+) -> None:
+    """Idempotent insert-or-update of a ``seen_courses`` row.
+
+    Always refreshes ``last_seen_at`` to ``datetime('now')``. Refreshes
+    ``last_notified_at`` only when ``notified=True``. On insert,
+    ``first_seen_at`` defaults to ``datetime('now')``; on update it is
+    preserved (we never overwrite the original sighting timestamp).
+
+    This is the Phase 5 daily-scan equivalent of :func:`mark_seen` +
+    optional :func:`mark_notified` in a single round-trip, with the
+    ``notified`` flag picking which side fires.
+    """
+    if notified:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO seen_courses (
+                    kurs_id, title, course_number, district, venue, date_range,
+                    last_availability, last_notified_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(kurs_id) DO UPDATE SET
+                    title             = excluded.title,
+                    course_number     = excluded.course_number,
+                    district          = excluded.district,
+                    venue             = excluded.venue,
+                    date_range        = excluded.date_range,
+                    last_availability = excluded.last_availability,
+                    last_seen_at      = datetime('now'),
+                    last_notified_at  = datetime('now')
+                """,
+                (
+                    snapshot.kurs_id,
+                    snapshot.title,
+                    snapshot.course_number,
+                    snapshot.district,
+                    snapshot.venue,
+                    snapshot.date_range,
+                    snapshot.availability,
+                ),
+            )
+    else:
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO seen_courses (
+                    kurs_id, title, course_number, district, venue, date_range,
+                    last_availability
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(kurs_id) DO UPDATE SET
+                    title             = excluded.title,
+                    course_number     = excluded.course_number,
+                    district          = excluded.district,
+                    venue             = excluded.venue,
+                    date_range        = excluded.date_range,
+                    last_availability = excluded.last_availability,
+                    last_seen_at      = datetime('now')
+                """,
+                (
+                    snapshot.kurs_id,
+                    snapshot.title,
+                    snapshot.course_number,
+                    snapshot.district,
+                    snapshot.venue,
+                    snapshot.date_range,
+                    snapshot.availability,
+                ),
+            )
+
+
 # --- notification_log -------------------------------------------------------
 
 

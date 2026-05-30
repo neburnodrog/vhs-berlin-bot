@@ -124,61 +124,6 @@ class TestBuildListText:
         assert "\\-" in text
 
 
-class TestBuildCourseMessage:
-    def _course(self, **kw: object) -> CourseSnapshot:
-        defaults = {
-            "kurs_id": 12345,
-            "title": "Yoga sanft",
-            "course_number": "Mi251-001K",
-            "district": "Mitte",
-            "venue": None,
-            "date_range": "01.06.2026 - 30.07.2026",
-            "availability": ">2",
-        }
-        defaults.update(kw)
-        return CourseSnapshot(**defaults)  # type: ignore[arg-type]
-
-    def test_returns_text_and_inline_keyboard(self) -> None:
-        course = self._course()
-        text, markup = handlers.build_course_message(
-            course,
-            matched_keywords=["Yoga"],
-            detail_url="https://example.test/CourseDetail.aspx?id=12345",
-        )
-        assert "Yoga sanft" in text or "Yoga" in text
-        # markup is an InlineKeyboardMarkup with exactly one URL button.
-        rows = markup.inline_keyboard
-        assert len(rows) == 1
-        assert len(rows[0]) == 1
-        assert rows[0][0].url == "https://example.test/CourseDetail.aspx?id=12345"
-
-    def test_includes_matched_keywords_in_message(self) -> None:
-        course = self._course()
-        text, _ = handlers.build_course_message(
-            course,
-            matched_keywords=["Yoga", "Sanft"],
-            detail_url="https://example.test/x",
-        )
-        assert "Yoga" in text
-        assert "Sanft" in text
-
-    def test_escapes_period_in_date_range(self) -> None:
-        course = self._course(date_range="01.06.2026")
-        text, _ = handlers.build_course_message(
-            course, matched_keywords=["Yoga"], detail_url="https://example.test/x"
-        )
-        # Date periods must be backslash-escaped for MD-V2.
-        assert "01\\.06\\.2026" in text
-
-    def test_includes_availability_literal_escaped(self) -> None:
-        course = self._course(availability=">2")
-        text, _ = handlers.build_course_message(
-            course, matched_keywords=["Yoga"], detail_url="https://example.test/x"
-        )
-        # ">" is MD-V2 reserved.
-        assert "\\>2" in text
-
-
 class TestBuildDistrictKeyboard:
     def test_shows_checkmark_marker_on_selected(self) -> None:
         district_map = {31: 5, 39: 6, 38: 7}

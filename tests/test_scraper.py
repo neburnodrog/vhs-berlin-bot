@@ -267,6 +267,55 @@ async def test_crawl_empty_district_ids_returns_empty_list() -> None:
     assert transport.calls == []
 
 
+async def test_crawl_district_invokes_raw_html_callback_per_page() -> None:
+    """Phase 5: snapshot callback fires once per result page.
+
+    The fixture transport serves three result pages (page_1, page_2,
+    page_2_stripped). With a callback wired in, we should see exactly
+    three invocations, each carrying ``(district_id, page_idx, bytes)``
+    where ``page_idx`` is the 0-indexed page number.
+    """
+    transport = _FixtureTransport()
+    calls: list[tuple[int, int, int]] = []  # (district_id, page_idx, byte_len)
+
+    def cb(district_id: int, page_idx: int, content: bytes) -> None:
+        calls.append((district_id, page_idx, len(content)))
+
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+            district_id=31,
+            raw_html_callback=cb,
+        )
+
+    # Three result pages -> three callback invocations.
+    assert len(calls) == 3
+    # Each invocation has the right district_id and a monotonically
+    # increasing page_idx starting at 0.
+    assert [c[0] for c in calls] == [31, 31, 31]
+    assert [c[1] for c in calls] == [0, 1, 2]
+    # And the content was non-empty (defensive — we don't want a None or b"").
+    assert all(c[2] > 0 for c in calls)
+
+
+async def test_crawl_district_omits_raw_html_callback_by_default_remains_backward_compat() -> None:
+    """Calling crawl_district without the new kwarg must work unchanged.
+
+    Cements the backward-compat guarantee from Phase 5 decision A.
+    """
+    transport = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        snapshots = await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+        )
+
+    assert len(snapshots) == 30
+
+
 async def test_crawl_single_district_returns_all_snapshots() -> None:
     """A single-district crawl returns every unique row across paginated pages.
 

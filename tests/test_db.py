@@ -196,6 +196,47 @@ def test_mark_notified_sets_timestamp(conn: sqlite3.Connection) -> None:
     assert db.get_seen_course(conn, kurs_id=1000).last_notified_at is not None
 
 
+def test_upsert_seen_course_inserts_with_notified_false(conn: sqlite3.Connection) -> None:
+    db.upsert_seen_course(conn, _snap(kurs_id=1000, availability=">2"), notified=False)
+    seen = db.get_seen_course(conn, kurs_id=1000)
+    assert seen is not None
+    assert seen.last_availability == ">2"
+    assert seen.last_notified_at is None  # not notified -> no timestamp
+
+
+def test_upsert_seen_course_inserts_with_notified_true_sets_last_notified_at(
+    conn: sqlite3.Connection,
+) -> None:
+    db.upsert_seen_course(conn, _snap(kurs_id=1001, availability=">2"), notified=True)
+    seen = db.get_seen_course(conn, kurs_id=1001)
+    assert seen is not None
+    assert seen.last_notified_at is not None
+
+
+def test_upsert_seen_course_updates_last_seen_at_but_preserves_first_seen_at(
+    conn: sqlite3.Connection,
+) -> None:
+    db.upsert_seen_course(conn, _snap(kurs_id=1002, availability=">2"), notified=False)
+    original = db.get_seen_course(conn, kurs_id=1002)
+    assert original is not None
+
+    # Backdate first_seen_at + last_seen_at so the update's bump is measurable.
+    conn.execute(
+        "UPDATE seen_courses SET first_seen_at = datetime('now', '-1 day'), "
+        "last_seen_at = datetime('now', '-1 day') WHERE kurs_id = 1002"
+    )
+    conn.commit()
+    earlier = db.get_seen_course(conn, kurs_id=1002)
+    assert earlier is not None
+
+    db.upsert_seen_course(conn, _snap(kurs_id=1002, availability="belegt"), notified=False)
+    updated = db.get_seen_course(conn, kurs_id=1002)
+    assert updated is not None
+    assert updated.first_seen_at == earlier.first_seen_at
+    assert updated.last_seen_at > earlier.last_seen_at
+    assert updated.last_availability == "belegt"
+
+
 # --- notification_log ------------------------------------------------------
 
 

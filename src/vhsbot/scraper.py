@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
 import httpx
 
@@ -48,13 +48,29 @@ async def _sleep(seconds: float) -> None:
         await asyncio.sleep(seconds)
 
 
+RawHtmlCallback = Callable[[int, int, bytes], None]
+
+
 async def crawl_district(
     *,
     client: httpx.AsyncClient,
     district_checkbox_index: int,
     sleep_seconds: float = 2.0,
+    district_id: int | None = None,
+    raw_html_callback: RawHtmlCallback | None = None,
 ) -> list[CourseSnapshot]:
-    """Run the full search flow for one district. Returns all paginated rows."""
+    """Run the full search flow for one district. Returns all paginated rows.
+
+    If ``raw_html_callback`` is provided, it is invoked once per result
+    page with ``(district_id, page_idx, content_bytes)`` where
+    ``page_idx`` is 0-indexed (page 1 of the results -> index 0). The
+    callback receives only response bodies for *result pages*, not the
+    intermediate form-setup POSTs. ``district_id`` is passed through
+    unchanged from the caller; if omitted it defaults to the checkbox
+    index (only the caller knows the real district id).
+    """
+    cb_district_id = district_id if district_id is not None else district_checkbox_index
+
     resp = await client.get(_SEARCH_URL)
     state = parse_form_state(resp.content)
 
@@ -83,6 +99,9 @@ async def crawl_district(
     )
     state = parse_form_state(resp.content)
 
+    page_idx = 0
+    if raw_html_callback is not None:
+        raw_html_callback(cb_district_id, page_idx, resp.content)
     snapshots: list[CourseSnapshot] = list(parse_results_page(resp.content))
 
     for _ in range(_MAX_PAGES_GUARD):
@@ -98,6 +117,9 @@ async def crawl_district(
             },
         )
         state = parse_form_state(resp.content)
+        page_idx += 1
+        if raw_html_callback is not None:
+            raw_html_callback(cb_district_id, page_idx, resp.content)
         snapshots.extend(parse_results_page(resp.content))
     else:
         logger.warning("crawl_district hit max-pages guard (%s); stopping", _MAX_PAGES_GUARD)
@@ -110,6 +132,7 @@ async def crawl(
     client: httpx.AsyncClient,
     district_ids: Iterable[int],
     sleep_seconds: float = 2.0,
+    raw_html_callback: RawHtmlCallback | None = None,
 ) -> list[CourseSnapshot]:
     """Scrape multiple districts and return a dedup'd snapshot list.
 
@@ -150,6 +173,8 @@ async def crawl(
             client=client,
             district_checkbox_index=checkbox_index,
             sleep_seconds=sleep_seconds,
+            district_id=district_id,
+            raw_html_callback=raw_html_callback,
         )
         for snap in snapshots:
             if snap.kurs_id in seen_kurs_ids:

@@ -58,7 +58,6 @@ from vhsbot._app_state import BD_CLIENT, BD_DB, BD_DB_LOCK, BD_SETTINGS
 from vhsbot.config import Settings
 from vhsbot.db import (
     BOOKABLE_AVAILABILITY,
-    CourseSnapshot,
     add_subscription,
     get_user_settings,
     list_subscriptions,
@@ -67,6 +66,7 @@ from vhsbot.db import (
     set_paused,
     upsert_user_settings,
 )
+from vhsbot.formatting import course_card
 from vhsbot.matching import matches
 from vhsbot.parser import parse_district_map
 
@@ -128,36 +128,6 @@ def build_list_text(keywords: list[str], districts: list[int], paused: bool) -> 
     status = "PAUSED" if paused else "active"
     plain = f"Status: {status}\nKeywords: {kw_block}\nDistricts: {dist_block}"
     return escape_markdown_v2(plain)
-
-
-def build_course_message(
-    course: CourseSnapshot,
-    matched_keywords: list[str],
-    detail_url: str,
-) -> tuple[str, InlineKeyboardMarkup]:
-    """Build the notification text + inline button for a single course."""
-    title = escape_markdown_v2(course.title)
-    cnum = escape_markdown_v2(course.course_number)
-    district = escape_markdown_v2(course.district or "")
-    date_range = escape_markdown_v2(course.date_range or "")
-    avail = escape_markdown_v2(course.availability)
-    matched = escape_markdown_v2(", ".join(matched_keywords))
-
-    parts = [
-        f"*{title}*",
-        f"Kurs: `{cnum}`",
-    ]
-    if district:
-        parts.append(f"Bezirk: {district}")
-    if date_range:
-        parts.append(f"Termin: {date_range}")
-    parts.append(f"Plätze: {avail}")
-    if matched_keywords:
-        parts.append(f"Matched: {matched}")
-
-    text = "\n".join(parts)
-    markup = InlineKeyboardMarkup([[InlineKeyboardButton("Details öffnen", url=detail_url)]])
-    return text, markup
 
 
 def build_district_keyboard(
@@ -365,7 +335,7 @@ async def _run_backfill(
         if not matched_keywords:
             continue
         detail_url = settings.detail_url_template.format(kurs_id=snap.kurs_id)
-        text, markup = build_course_message(snap, matched_keywords, detail_url)
+        text, markup = course_card(snap, matched_keywords, "backfill", detail_url)
         await context.bot.send_message(
             chat_id=user_id,
             text=text,
