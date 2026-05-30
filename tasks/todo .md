@@ -47,7 +47,7 @@ The original recon in this section was partially wrong. The corrected flow below
 
 ## Implementation checklist
 
-### Phase 0 — repo + scaffold ✅ done (except first commit)
+### Phase 0 — repo + scaffold done (except first commit)
 
 - [x] Plan written to `tasks/todo .md`
 - [x] Directory skeleton (`src/vhsbot/`, `tests/fixtures/`, `tasks/`)
@@ -110,6 +110,7 @@ The original recon in this section was partially wrong. The corrected flow below
 - [x] **Phase 2a — parser** (`src/vhsbot/parser.py`): `parse_form_state`, `parse_results_page`, `has_next_page`. Pure functions over raw response bytes; decoded inside the parser with `windows-1252`. 11 tests.
 - [x] **Phase 2b — HTTP orchestrator** (`src/vhsbot/scraper.py`): `crawl_district(client, district_checkbox_index, sleep_seconds)` drives the full GET-form → POST-Erweitert → POST-search → POST-next-page loop. State re-parsed from every response. Sleep between requests configurable. Dependency-injected `httpx.AsyncClient` (production wires UA + cookies; tests inject `_FixtureTransport` replaying captured HTML). 3 tests; verified the orchestrator (a) uses the real `btnSearch=Suchen` submit, not `__EVENTTARGET`, (b) sends district checkbox by index, (c) paginates via image-input coords with refreshed `__EVENTVALIDATION`, (d) stops when `has_next_page` returns false. Total 37 tests, ruff clean.
 - [x] **Phase 2c — district map + crawl wrapper**: `parse_district_map(html_bytes)` reads the GET response and yields `district_id → checkbox_index` (15 entries, anchor 31 → 5 verified). `crawl(client, district_ids, sleep_seconds)` does one initial GET to build the map, validates ids (raises `ValueError` listing unknown ids), then loops `crawl_district` per district in sorted order and dedups snapshots by `kurs_id` (first-occurrence wins). 3 new tests; 40 total, ruff clean. **Snapshot persistence deferred to Phase 5** — it is an operational concern coupled to the daily scheduler, not the pure HTTP orchestrator.
+  - **Review pass (post-0380405)**: `parse_district_map` moved from `scraper.py` to `parser.py` (its natural home — pure-bytes parsing alongside `parse_form_state`/`parse_results_page`). "Alle Bezirke" wildcard (district id 0) now filtered out of the map so callers cannot pass district_id=0 through validation. `crawl` short-circuits to `[]` on empty `district_ids` (no network), widened to `Iterable[int]`. Dedup test rewritten: a new `_DedupTransport` mints per-district disjoint-but-overlapping result sets (ids 1000..1009 vs 1005..1014) with per-district title sentinels, so the test now proves both (a) cross-district dedup and (b) first-occurrence-wins. Plus five new edge-case tests (empty bytes, non-int value, duplicate-district, Alle-Bezirke exclusion, empty district set, single-district crawl). 46 total, ruff clean.
 
 ### Phase 3 — matching + diff
 

@@ -127,3 +127,57 @@ def test_has_next_page_false_when_pager_lacks_right_arrow() -> None:
         <input type="image" name="ctl00$Content$ILDataGrid1$ctl01$ctl05" src="rightend.svg"/>
     </body></html>"""
     assert parser.has_next_page(html) is False
+
+
+# --- parse_district_map ----------------------------------------------------
+
+
+def test_parse_district_map_extracts_known_districts(form_initial: bytes) -> None:
+    district_map = parser.parse_district_map(form_initial)
+
+    # Anchor: Mitte (district id 31) is at checkbox index 5.
+    assert district_map[31] == 5
+    # Berlin has 12 admin districts plus VHS-internal cross-district rows.
+    assert len(district_map) >= 12
+    # The "Alle Bezirke" wildcard (district id 0) must not leak through.
+    assert 0 not in district_map
+
+
+def test_parse_district_map_returns_empty_dict_on_empty_bytes() -> None:
+    assert parser.parse_district_map(b"") == {}
+
+
+def test_parse_district_map_skips_non_int_value() -> None:
+    # value="abc" cannot be coerced to int — the parser must skip silently
+    # rather than crash the whole map.
+    html = (
+        b"<html><body>"
+        b'<input type="checkbox" '
+        b'name="ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$0" '
+        b'value="abc">'
+        b"</body></html>"
+    )
+    assert parser.parse_district_map(html) == {}
+
+
+def test_parse_district_map_first_write_wins_on_duplicate_district() -> None:
+    # Two checkboxes claim district 31 at indexes 5 and 7. First-write-wins
+    # means the lower index sticks; the duplicate must not overwrite.
+    html = (
+        b"<html><body>"
+        b'<input type="checkbox" '
+        b'name="ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$5" '
+        b'value="31">'
+        b'<input type="checkbox" '
+        b'name="ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$7" '
+        b'value="31">'
+        b"</body></html>"
+    )
+    result = parser.parse_district_map(html)
+    assert result == {31: 5}
+
+
+def test_parse_district_map_excludes_alle_bezirke_sentinel(form_initial: bytes) -> None:
+    # The form's first district checkbox is "Alle Bezirke" with value="0";
+    # callers must not be able to pass district_id=0 through validation.
+    assert 0 not in parser.parse_district_map(form_initial)

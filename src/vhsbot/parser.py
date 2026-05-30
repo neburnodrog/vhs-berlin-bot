@@ -18,6 +18,9 @@ _ENCODING = "windows-1252"
 _KURS_ID_RE = re.compile(r"CourseDetail\.aspx\?id=(\d+)", re.IGNORECASE)
 _NEXT_PAGE_NAME_RE = re.compile(r"\$ILDataGrid1\$ctl01\$ctl04$")
 _WS_RE = re.compile(r"\s+")
+_DISTRICT_CHECKBOX_NAME_RE = re.compile(
+    r"^ctl00\$Content\$AreaListAdvanced1\$CheckBoxListDistricts\$(\d+)$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,3 +121,39 @@ def has_next_page(html_bytes: bytes) -> bool:
         if _NEXT_PAGE_NAME_RE.search(name):
             return True
     return False
+
+
+def parse_district_map(html_bytes: bytes) -> dict[int, int]:
+    """Map ``district_id -> checkbox_index`` by reading the GET form HTML.
+
+    The advanced-search tab renders each district as
+    ``<input type="checkbox" name="...$CheckBoxListDistricts$<N>" value="<district_id>">``
+    where ``N`` is the checkbox index used in POST bodies and ``value`` is
+    the canonical district id stored on each course row.
+
+    The "Alle Bezirke" wildcard checkbox (district id 0) is intentionally
+    dropped: it represents "all districts" and would short-circuit any
+    callers that defensively pass district_id=0.
+    """
+    soup = _decode(html_bytes)
+    out: dict[int, int] = {}
+    for inp in soup.find_all("input", {"type": "checkbox"}):
+        name = str(inp.get("name", ""))
+        match = _DISTRICT_CHECKBOX_NAME_RE.match(name)
+        if match is None:
+            continue
+        raw_value = inp.get("value")
+        if raw_value is None:
+            continue
+        try:
+            district_id = int(str(raw_value))
+        except ValueError:
+            continue
+        if district_id == 0:
+            # "Alle Bezirke" sentinel; not a real district.
+            continue
+        checkbox_index = int(match.group(1))
+        # First-write-wins so an accidental duplicate row does not silently
+        # overwrite the canonical mapping.
+        out.setdefault(district_id, checkbox_index)
+    return out

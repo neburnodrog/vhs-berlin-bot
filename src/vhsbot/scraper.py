@@ -12,13 +12,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
+from collections.abc import Iterable
 
 import httpx
-from bs4 import BeautifulSoup
 
 from vhsbot.db import CourseSnapshot
-from vhsbot.parser import FormState, has_next_page, parse_form_state, parse_results_page
+from vhsbot.parser import (
+    FormState,
+    has_next_page,
+    parse_district_map,
+    parse_form_state,
+    parse_results_page,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +31,6 @@ _SEARCH_URL = "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseSearch.a
 _RESULTS_URL = "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseList.aspx"
 _NEXT_PAGE_INPUT = "ctl00$Content$ILDataGrid1$ctl01$ctl04"
 _MAX_PAGES_GUARD = 50
-_DISTRICT_CHECKBOX_NAME_RE = re.compile(
-    r"^ctl00\$Content\$AreaListAdvanced1\$CheckBoxListDistricts\$(\d+)$"
-)
-_FORM_ENCODING = "windows-1252"
 
 
 def _state_fields(state: FormState) -> dict[str, str]:
@@ -104,41 +105,10 @@ async def crawl_district(
     return snapshots
 
 
-def parse_district_map(html_bytes: bytes) -> dict[int, int]:
-    """Map ``district_id -> checkbox_index`` by reading the GET form HTML.
-
-    The advanced-search tab renders each district as
-    ``<input type="checkbox" name="...$CheckBoxListDistricts$<N>" value="<district_id>">``
-    where ``N`` is the checkbox index used in POST bodies and ``value`` is
-    the canonical district id stored on each course row.
-    """
-    if not html_bytes:
-        return {}
-    soup = BeautifulSoup(html_bytes.decode(_FORM_ENCODING, errors="replace"), "lxml")
-    out: dict[int, int] = {}
-    for inp in soup.find_all("input", {"type": "checkbox"}):
-        name = str(inp.get("name", ""))
-        match = _DISTRICT_CHECKBOX_NAME_RE.match(name)
-        if match is None:
-            continue
-        raw_value = inp.get("value")
-        if raw_value is None:
-            continue
-        try:
-            district_id = int(str(raw_value))
-        except ValueError:
-            continue
-        checkbox_index = int(match.group(1))
-        # First-write-wins so an accidental duplicate row does not silently
-        # overwrite the canonical mapping.
-        out.setdefault(district_id, checkbox_index)
-    return out
-
-
 async def crawl(
     *,
     client: httpx.AsyncClient,
-    district_ids: set[int],
+    district_ids: Iterable[int],
     sleep_seconds: float = 2.0,
 ) -> list[CourseSnapshot]:
     """Scrape multiple districts and return a dedup'd snapshot list.
@@ -147,20 +117,32 @@ async def crawl(
     map, validates that every requested id is known, then delegates to
     :func:`crawl_district` for each district in sorted order. Snapshots are
     dedup'd by ``kurs_id`` with first-occurrence wins (sorted district
-    order makes the choice deterministic). Sleeps ``sleep_seconds`` between
-    per-district crawls in addition to the per-request sleeps inside
-    ``crawl_district``.
+    order makes the choice deterministic).
+
+    An empty ``district_ids`` short-circuits to ``[]`` with no network
+    activity.
+
+    Note on sleeps: this function sleeps ``sleep_seconds`` between
+    per-district crawls, and ``crawl_district`` itself sleeps
+    ``sleep_seconds`` before its opening request. The effective gap
+    between districts is therefore ``2 * sleep_seconds``. This doubling
+    is intentional politeness rather than a bug — districts are scanned
+    daily, not in tight loops.
     """
+    requested = sorted(set(district_ids))
+    if not requested:
+        return []
+
     initial = await client.get(_SEARCH_URL)
     district_map = parse_district_map(initial.content)
 
-    unknown = sorted(d for d in district_ids if d not in district_map)
+    unknown = [d for d in requested if d not in district_map]
     if unknown:
         raise ValueError(f"unknown district id(s): {unknown}; known: {sorted(district_map)}")
 
     seen_kurs_ids: set[int] = set()
     out: list[CourseSnapshot] = []
-    for i, district_id in enumerate(sorted(district_ids)):
+    for i, district_id in enumerate(requested):
         if i > 0:
             await _sleep(sleep_seconds)
         checkbox_index = district_map[district_id]
