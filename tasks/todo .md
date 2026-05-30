@@ -107,14 +107,9 @@ The original recon in this section was partially wrong. The corrected flow below
 
 ### Phase 2 — scraper
 
-- [ ] `src/vhsbot/scraper.py`:
-  - `async def fetch_form() -> FormState` — GET `CourseSearch.aspx`, extract `__VIEWSTATE`, `__VIEWSTATEGENERATOR`, `__EVENTVALIDATION`, capture session cookie
-  - `async def search_district(state, district_id: int) -> AsyncIterator[Course]` — POST with the Erweitert tab, district checkbox, empty search term, follow pagination via `__doPostBack` until no "next page" button
-  - `async def crawl(districts: set[int]) -> list[Course]` — sequential district loop, 2s sleep between requests
-- [ ] `Course` dataclass: `kurs_id, course_number, title, district, venue, date_range, availability, raw_html_hash`
-- [ ] Decode response bytes with `response.content.decode('windows-1252')`
-- [ ] Parser uses `BeautifulSoup(html, 'lxml')`; extract from `table.CourseListDataGrid` rows
-- [ ] Persist raw response HTML per page to `/data/snapshots/YYYY-MM-DD/<district>-page-<N>.html` for debugging (auto-prune >7 days)
+- [x] **Phase 2a — parser** (`src/vhsbot/parser.py`): `parse_form_state`, `parse_results_page`, `has_next_page`. Pure functions over raw response bytes; decoded inside the parser with `windows-1252`. 11 tests.
+- [x] **Phase 2b — HTTP orchestrator** (`src/vhsbot/scraper.py`): `crawl_district(client, district_checkbox_index, sleep_seconds)` drives the full GET-form → POST-Erweitert → POST-search → POST-next-page loop. State re-parsed from every response. Sleep between requests configurable. Dependency-injected `httpx.AsyncClient` (production wires UA + cookies; tests inject `_FixtureTransport` replaying captured HTML). 3 tests; verified the orchestrator (a) uses the real `btnSearch=Suchen` submit, not `__EVENTTARGET`, (b) sends district checkbox by index, (c) paginates via image-input coords with refreshed `__EVENTVALIDATION`, (d) stops when `has_next_page` returns false. Total 37 tests, ruff clean.
+- [ ] **Phase 2c — district map + crawl wrapper**: parse `form-initial.html` once at startup to build `dict[int, int]` (district_id → checkbox_index). Add `crawl(client, district_ids, sleep_seconds)` that loops `crawl_district` across districts and dedups by `kurs_id`. Persist raw response HTML to `/data/snapshots/YYYY-MM-DD/<district>-page-<N>.html` for replay debugging (auto-prune >7 days).
 
 ### Phase 3 — matching + diff
 
