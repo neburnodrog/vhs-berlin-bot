@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from vhsbot import parser
-from vhsbot.db import CourseSnapshot
+from vhsbot.db import AVAILABILITY_LITERALS, CourseSnapshot
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -56,10 +56,30 @@ def test_first_course_matches_fixture(page_1: bytes) -> None:
 
 def test_availability_literals_match_plan(page_1: bytes) -> None:
     courses = parser.parse_results_page(page_1)
-    valid = {">2", "2", "1", "belegt"}
     for course in courses:
-        assert course.availability in valid, (
+        assert course.availability in AVAILABILITY_LITERALS, (
             f"unexpected availability {course.availability!r} for {course.kurs_id}"
+        )
+
+
+def test_availability_normalizer_returns_only_canonical_literals_for_known_inputs() -> None:
+    # Cross-module invariant: every known input form for the places cell
+    # (including whitespace + case-noise variants the site has emitted) must
+    # normalize to a value drawn from the single source of truth in db.py.
+    # If a future site change adds a fifth literal, this test catches it
+    # together with the diff classifier's ValueError guard.
+    known_inputs = [
+        ">2",
+        " > 2 ",
+        "2",
+        "1",
+        "belegt",
+        "BELEGT",
+        " Belegt ",
+    ]
+    for raw in known_inputs:
+        assert parser._availability(raw) in AVAILABILITY_LITERALS, (
+            f"normalizer leaked non-canonical value for input {raw!r}"
         )
 
 

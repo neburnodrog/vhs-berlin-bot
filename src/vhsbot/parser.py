@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
-from vhsbot.db import CourseSnapshot
+from vhsbot.db import AVAILABILITY_LITERALS, CourseSnapshot
 
 _ENCODING = "windows-1252"
 _KURS_ID_RE = re.compile(r"CourseDetail\.aspx\?id=(\d+)", re.IGNORECASE)
@@ -62,16 +62,15 @@ def _text(td: Tag | None) -> str:
 
 
 def _availability(raw: str) -> str:
-    """Normalize the places cell to one of the plan-locked literals."""
+    """Normalize the places cell to one of the plan-locked literals.
+
+    Returns the literal verbatim from :data:`vhsbot.db.AVAILABILITY_LITERALS`
+    on a match; falls through to the raw input otherwise so callers can log
+    the unexpected value.
+    """
     cleaned = raw.replace(" ", "").lower()
-    if cleaned == "belegt":
-        return "belegt"
-    if cleaned == ">2":
-        return ">2"
-    if cleaned == "2":
-        return "2"
-    if cleaned == "1":
-        return "1"
+    if cleaned in AVAILABILITY_LITERALS:
+        return cleaned
     return raw  # surface unexpected literals to caller for logging
 
 

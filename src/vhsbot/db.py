@@ -11,6 +11,7 @@ import sqlite3
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS subscriptions (
@@ -274,6 +275,14 @@ def mark_notified(conn: sqlite3.Connection, *, kurs_id: int) -> None:
 
 
 VALID_NOTIFICATION_REASONS: frozenset[str] = frozenset({"new", "back_in_stock", "backfill"})
+
+# Single source of truth for the four availability literals the parser emits
+# and the diff classifier consumes. The site has historically used these exact
+# strings (verified against the windows-1252 fixtures in tests/fixtures/); if a
+# fifth literal ever appears, this is the one place to add it.
+Availability = Literal[">2", "2", "1", "belegt"]
+AVAILABILITY_LITERALS: frozenset[str] = frozenset({">2", "2", "1", "belegt"})
+BOOKABLE_AVAILABILITY: frozenset[str] = frozenset({">2", "2", "1"})
 
 
 def record_notification(

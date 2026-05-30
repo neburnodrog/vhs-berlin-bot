@@ -37,6 +37,12 @@ def matches(course: CourseSnapshot, keywords: Iterable[str]) -> list[str]:
     ``fold(title) + " " + fold(course_number)``. Empty / whitespace-only
     keywords are skipped. Original casing of the keyword is preserved in
     the returned list.
+
+    Corner case: multi-word keywords containing whitespace match against the
+    space-joined title-then-course-number haystack, which means a keyword can
+    span the field boundary. See
+    ``test_matches_keyword_with_space_can_bridge_title_and_course_number``
+    for the pinned semantics.
     """
     haystack = fold(course.title) + " " + fold(course.course_number)
     hits: list[str] = []

@@ -78,6 +78,14 @@ def test_classify_raises_on_unknown_availability() -> None:
         diff.classify(_current("foobar"), None)
 
 
+def test_classify_raises_on_unknown_previous_availability() -> None:
+    # Symmetric guard: a drift literal sneaking into seen_courses must surface
+    # here as a ValueError rather than silently falling through to "unchanged".
+    # "ausgebucht" is a plausible drift (a synonym the site might adopt).
+    with pytest.raises(ValueError, match="ausgebucht"):
+        diff.classify(_current(">2"), _previous("ausgebucht"))
+
+
 def test_classify_result_type_is_reexported() -> None:
     # Callers should be able to import the literal alias from the module.
     assert hasattr(diff, "ClassifyResult")

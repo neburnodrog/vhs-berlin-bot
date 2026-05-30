@@ -121,6 +121,7 @@ The original recon in this section was partially wrong. The corrected flow below
   - `classify(current, previous) -> ClassifyResult` (`Literal["new", "back_in_stock", "unchanged", "still_full"]`, re-exported).
   - "new" when previous is None; "back_in_stock" on belegt→{>2,2,1}; "still_full" on belegt→belegt; "unchanged" otherwise (incl. going-out-of-stock).
   - Raises `ValueError` if `current.availability` is not one of the four parser literals. 18 tests (mostly parametrized).
+  - **Review pass (post-4ba1f64)**: availability literals hoisted to `db.py` as single source of truth (`Availability` Literal alias, `AVAILABILITY_LITERALS`, `BOOKABLE_AVAILABILITY`); `parser._availability` and `diff.classify` now import from there. `classify` validates `previous.last_availability` symmetrically (drift in stored state raises just like drift in parser output). Test additions: input-order pin for `matches`, bridge-behavior pin for space-containing keywords (with docstring callout), fold/match edge cases, parser↔db cross-module invariant test. 95 total, ruff clean.
 
 ### Phase 4 — handlers + onboarding
 
