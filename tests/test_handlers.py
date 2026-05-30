@@ -128,34 +128,70 @@ class TestBuildListText:
 class TestBuildDistrictKeyboard:
     def test_shows_checkmark_marker_on_selected(self) -> None:
         district_map = {31: 5, 39: 6, 38: 7}
-        markup = handlers.build_district_keyboard(district_map, selected={31})
+        district_names = {31: "Mitte", 39: "Treptow-Köpenick", 38: "Neukölln"}
+        markup = handlers.build_district_keyboard(district_map, district_names, selected={31})
         labels = [btn.text for row in markup.inline_keyboard for btn in row]
         # Selected districts get a "[x]" marker; unselected do not.
-        selected_label = next(label for label in labels if "31" in label)
-        unselected_label = next(label for label in labels if "39" in label)
+        selected_label = next(label for label in labels if "Mitte" in label)
+        unselected_label = next(label for label in labels if "Treptow" in label)
         assert "[x]" in selected_label
         assert "[x]" not in unselected_label
 
     def test_includes_alle_and_fertig_buttons(self) -> None:
-        markup = handlers.build_district_keyboard({31: 5}, selected=set())
+        markup = handlers.build_district_keyboard({31: 5}, {31: "Mitte"}, selected=set())
         all_buttons = [btn for row in markup.inline_keyboard for btn in row]
         callbacks = {btn.callback_data for btn in all_buttons}
         assert "all" in callbacks
         assert "done" in callbacks
 
     def test_per_district_callback_data_is_toggle_id(self) -> None:
-        markup = handlers.build_district_keyboard({31: 5, 39: 6}, selected=set())
+        markup = handlers.build_district_keyboard(
+            {31: 5, 39: 6}, {31: "Mitte", 39: "Treptow-Köpenick"}, selected=set()
+        )
         all_buttons = [btn for row in markup.inline_keyboard for btn in row]
         callbacks = {btn.callback_data for btn in all_buttons}
         assert "toggle:31" in callbacks
         assert "toggle:39" in callbacks
+
+    def test_buttons_render_human_district_names_not_numeric_ids(self) -> None:
+        # Phase 7 UX: the picker shows "Mitte"/"Friedrichshain-Kreuzberg",
+        # not "31"/"32". Numeric ids stay only as the callback_data payload
+        # so the toggle handler keeps its integer-keyed model.
+        district_map = {31: 5, 32: 6, 39: 7}
+        district_names = {
+            31: "Mitte",
+            32: "Friedrichshain-Kreuzberg",
+            39: "Treptow-Köpenick",
+        }
+        markup = handlers.build_district_keyboard(district_map, district_names, selected={31})
+        labels = [btn.text for row in markup.inline_keyboard for btn in row]
+        # Selected name carries the [x] marker; unselected names are bare.
+        assert any(label == "[x] Mitte" for label in labels)
+        assert "Friedrichshain-Kreuzberg" in labels
+        assert "Treptow-Köpenick" in labels
+        # The raw district id must NOT appear as a button label.
+        for forbidden in ("31", "32", "39", "[x] 31", "[x] 32", "[x] 39"):
+            assert forbidden not in labels, f"numeric id {forbidden!r} leaked into picker label"
+        # callback_data shape is unchanged (still keyed by district id).
+        all_buttons = [btn for row in markup.inline_keyboard for btn in row]
+        callbacks = {btn.callback_data for btn in all_buttons}
+        assert {"toggle:31", "toggle:32", "toggle:39"} <= callbacks
+
+    def test_falls_back_to_district_id_when_name_missing(self) -> None:
+        # If the names map is missing an entry (e.g. site changed its label
+        # markup), render the numeric id rather than crashing onboarding.
+        markup = handlers.build_district_keyboard({31: 5, 99: 6}, {31: "Mitte"}, selected=set())
+        labels = [btn.text for row in markup.inline_keyboard for btn in row]
+        assert "Mitte" in labels
+        assert "99" in labels
 
     def test_uses_three_columns_per_row_for_district_buttons(self) -> None:
         # 7 districts -> 3 rows of 3 + 1 of 1 (or 3/3/1) for the district grid.
         # We don't pin the exact split, but we do pin "no row exceeds 3 columns"
         # for the district-row portion.
         district_map = dict.fromkeys(range(31, 38), 0)
-        markup = handlers.build_district_keyboard(district_map, selected=set())
+        district_names = {did: f"Bezirk{did}" for did in district_map}
+        markup = handlers.build_district_keyboard(district_map, district_names, selected=set())
         # All rows except the final Alle/Fertig row must have at most 3 buttons.
         district_rows = markup.inline_keyboard[:-1]
         for row in district_rows:
@@ -204,8 +240,13 @@ class TestStartHandler:
         self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Stub the initial-form GET so start() can render the district keyboard
-        # without real HTTP. We monkeypatch _fetch_district_map to return a tiny map.
-        monkeypatch.setattr(handlers, "_fetch_district_map", AsyncMock(return_value={31: 5, 39: 6}))
+        # without real HTTP. We monkeypatch _fetch_district_data to return the
+        # (checkbox_map, names_map) tuple the handler now expects.
+        monkeypatch.setattr(
+            handlers,
+            "_fetch_district_data",
+            AsyncMock(return_value=({31: 5, 39: 6}, {31: "Mitte", 39: "Treptow-Köpenick"})),
+        )
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object())
 
@@ -249,12 +290,12 @@ class TestStartHandler:
     async def test_start_handles_district_map_fetch_failure(
         self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # MINOR: _fetch_district_map raising httpx.HTTPError should produce
+        # MINOR: _fetch_district_data raising httpx.HTTPError should produce
         # a friendly "site down" message instead of a generic apology.
-        async def boom(*a: object, **kw: object) -> dict[int, int]:
+        async def boom(*a: object, **kw: object) -> tuple[dict[int, int], dict[int, str]]:
             raise httpx.ConnectError("boom")
 
-        monkeypatch.setattr(handlers, "_fetch_district_map", boom)
+        monkeypatch.setattr(handlers, "_fetch_district_data", boom)
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object())
 

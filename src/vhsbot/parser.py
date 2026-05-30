@@ -122,6 +122,56 @@ def has_next_page(html_bytes: bytes) -> bool:
     return False
 
 
+def parse_district_names(html_bytes: bytes) -> dict[int, str]:
+    """Map ``district_id -> human-readable label`` by reading the GET form HTML.
+
+    Each district checkbox is paired with a ``<label for="<id>">`` whose
+    ``for`` attribute matches the checkbox's ``id``. The label text is the
+    Bezirk name as the site presents it (e.g. ``"Mitte"``,
+    ``"Friedrichshain-Kreuzberg"``) with German diacritics preserved — the
+    string is passed straight through to a Telegram button label, which is
+    UTF-8.
+
+    Defensive on two fronts:
+
+    * The "Alle Bezirke" wildcard (district id 0) is dropped, matching
+      :func:`parse_district_map` so the two maps stay key-aligned.
+    * If a checkbox has no matching ``<label for="...">`` the entry falls
+      back to ``str(district_id)`` rather than being skipped — one missing
+      label must not blow up onboarding for the other 11 districts.
+    """
+    soup = _decode(html_bytes)
+    # Index labels by their ``for`` attr once so the inner loop is O(1)
+    # per checkbox instead of re-walking the DOM each iteration.
+    labels_by_for: dict[str, str] = {}
+    for lbl in soup.find_all("label"):
+        for_attr = lbl.get("for")
+        if for_attr is None:
+            continue
+        labels_by_for[str(for_attr)] = _WS_RE.sub(" ", lbl.get_text(strip=True)).strip()
+
+    out: dict[int, str] = {}
+    for inp in soup.find_all("input", {"type": "checkbox"}):
+        name = str(inp.get("name", ""))
+        if _DISTRICT_CHECKBOX_NAME_RE.match(name) is None:
+            continue
+        raw_value = inp.get("value")
+        if raw_value is None:
+            continue
+        try:
+            district_id = int(str(raw_value))
+        except ValueError:
+            continue
+        if district_id == 0:
+            continue
+        checkbox_id = inp.get("id")
+        label_text = labels_by_for.get(str(checkbox_id)) if checkbox_id is not None else None
+        # First-write-wins, mirroring ``parse_district_map`` so a stray
+        # duplicate row cannot silently overwrite the canonical label.
+        out.setdefault(district_id, label_text if label_text else str(district_id))
+    return out
+
+
 def parse_district_map(html_bytes: bytes) -> dict[int, int]:
     """Map ``district_id -> checkbox_index`` by reading the GET form HTML.
 

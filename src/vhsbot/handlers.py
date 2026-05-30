@@ -67,7 +67,7 @@ from vhsbot.db import (
 from vhsbot.formatting import course_card
 from vhsbot.jobs import daily_scan as _daily_scan
 from vhsbot.matching import matches
-from vhsbot.parser import parse_district_map
+from vhsbot.parser import parse_district_map, parse_district_names
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +81,7 @@ BACKFILL_CAP = 15
 
 # user_data keys (per-user state inside the onboarding ConversationHandler)
 _UD_DISTRICT_MAP = "district_map"  # dict[int, int]
+_UD_DISTRICT_NAMES = "district_names"  # dict[int, str]
 _UD_SELECTED_DISTRICTS = "selected_districts"  # set[int]
 
 
@@ -129,7 +130,9 @@ def build_list_text(keywords: list[str], districts: list[int], paused: bool) -> 
 
 
 def build_district_keyboard(
-    district_map: dict[int, int], selected: set[int]
+    district_map: dict[int, int],
+    district_names: dict[int, str],
+    selected: set[int],
 ) -> InlineKeyboardMarkup:
     """Render the multi-select district keyboard.
 
@@ -137,13 +140,21 @@ def build_district_keyboard(
     plus a final row with "Alle" (select all) and "Fertig" (confirm).
     Selected districts show a leading ``[x]`` marker — no emojis per the
     Phase 4 spec.
+
+    Button text is the human-readable Bezirk name from ``district_names``;
+    if a name is missing (defensive — should not happen when both maps
+    come from the same form fetch) we fall back to the numeric district id
+    so onboarding still works rather than crashing on a ``KeyError``.
+    Callback data stays keyed by the integer district id so the toggle
+    handler keeps its compact wire format.
     """
     sorted_ids = sorted(district_map.keys())
     rows: list[list[InlineKeyboardButton]] = []
     current_row: list[InlineKeyboardButton] = []
     for district_id in sorted_ids:
         marker = "[x] " if district_id in selected else ""
-        label = f"{marker}{district_id}"
+        name = district_names.get(district_id, str(district_id))
+        label = f"{marker}{name}"
         current_row.append(InlineKeyboardButton(label, callback_data=f"toggle:{district_id}"))
         if len(current_row) == 3:
             rows.append(current_row)
@@ -237,8 +248,21 @@ def _client(context: ContextTypes.DEFAULT_TYPE) -> httpx.AsyncClient:
 _locked_db = locked_db
 
 
-async def _fetch_district_map(client: httpx.AsyncClient, settings: Settings) -> dict[int, int]:
-    """Fetch the search form and parse its district checkbox map.
+async def _fetch_district_data(
+    client: httpx.AsyncClient, settings: Settings
+) -> tuple[dict[int, int], dict[int, str]]:
+    """Fetch the search form once and parse both district maps from it.
+
+    Returns ``(checkbox_map, names_map)``:
+
+    * ``checkbox_map`` — ``district_id -> checkbox_index`` for POST bodies.
+    * ``names_map``    — ``district_id -> human-readable Bezirk name`` for
+      rendering the inline-keyboard button labels.
+
+    Both maps come from a single GET so we never split the request budget
+    or risk the two views drifting out of sync. The sibling helper in
+    :mod:`vhsbot.jobs` keeps its leaner ``parse_district_map``-only path
+    because the daily scan doesn't need the names.
 
     Wraps the GET in try/except + ``raise_for_status`` so the caller can
     distinguish "site down" from "we have a bug" and surface a more
@@ -250,18 +274,18 @@ async def _fetch_district_map(client: httpx.AsyncClient, settings: Settings) -> 
     except httpx.HTTPError as e:
         logger.warning("district-map fetch failed: %s", e)
         raise
-    return parse_district_map(resp.content)
+    return parse_district_map(resp.content), parse_district_names(resp.content)
 
 
-async def _safe_fetch_district_map(
+async def _safe_fetch_district_data(
     update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> dict[int, int] | None:
-    """Wrapper around :func:`_fetch_district_map` that surfaces a friendly
+) -> tuple[dict[int, int], dict[int, str]] | None:
+    """Wrapper around :func:`_fetch_district_data` that surfaces a friendly
     "site down" message and returns ``None`` instead of bubbling up the
     network error. Callers branch on ``None`` to short-circuit cleanly.
     """
     try:
-        return await _fetch_district_map(_client(context), _settings(context))
+        return await _fetch_district_data(_client(context), _settings(context))
     except httpx.HTTPError:
         if update.message is not None:
             await update.message.reply_text(
@@ -367,16 +391,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         return ConversationHandler.END
 
     # New user: kick off the onboarding conversation.
-    district_map = await _safe_fetch_district_map(update, context)
-    if district_map is None:
+    fetched = await _safe_fetch_district_data(update, context)
+    if fetched is None:
         return ConversationHandler.END
+    district_map, district_names = fetched
     context.user_data[_UD_DISTRICT_MAP] = district_map
+    context.user_data[_UD_DISTRICT_NAMES] = district_names
     context.user_data[_UD_SELECTED_DISTRICTS] = set()
 
     assert update.message is not None
     await update.message.reply_text(
         "Welcome! Pick the districts you want me to watch. Tap to toggle, then press Fertig.",
-        reply_markup=build_district_keyboard(district_map, selected=set()),
+        reply_markup=build_district_keyboard(district_map, district_names, selected=set()),
     )
     return STATE_PICK_DISTRICTS
 
@@ -447,10 +473,12 @@ async def unwatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def districts_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    district_map = await _safe_fetch_district_map(update, context)
-    if district_map is None:
+    fetched = await _safe_fetch_district_data(update, context)
+    if fetched is None:
         return ConversationHandler.END
+    district_map, district_names = fetched
     context.user_data[_UD_DISTRICT_MAP] = district_map
+    context.user_data[_UD_DISTRICT_NAMES] = district_names
     # Pre-seed selection with the user's current districts.
     user = update.effective_user
     assert user is not None
@@ -462,7 +490,7 @@ async def districts_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     assert update.message is not None
     await update.message.reply_text(
         "Pick your districts. Tap to toggle, then press Fertig.",
-        reply_markup=build_district_keyboard(district_map, selected=selected),
+        reply_markup=build_district_keyboard(district_map, district_names, selected=selected),
     )
     return STATE_PICK_DISTRICTS
 
@@ -539,6 +567,7 @@ async def on_district_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE)
     assert query is not None
 
     district_map: dict[int, int] = context.user_data.get(_UD_DISTRICT_MAP, {})
+    district_names: dict[int, str] = context.user_data.get(_UD_DISTRICT_NAMES, {})
     selected: set[int] = context.user_data.get(_UD_SELECTED_DISTRICTS, set())
 
     data = query.data or ""
@@ -574,7 +603,7 @@ async def on_district_toggle(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     context.user_data[_UD_SELECTED_DISTRICTS] = selected
     await query.edit_message_reply_markup(
-        reply_markup=build_district_keyboard(district_map, selected=selected)
+        reply_markup=build_district_keyboard(district_map, district_names, selected=selected)
     )
     return STATE_PICK_DISTRICTS
 
@@ -603,6 +632,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     later ``/start`` begins fresh.
     """
     context.user_data.pop(_UD_DISTRICT_MAP, None)
+    context.user_data.pop(_UD_DISTRICT_NAMES, None)
     context.user_data.pop(_UD_SELECTED_DISTRICTS, None)
     if update.message is not None:
         await update.message.reply_text("Cancelled.")
@@ -618,6 +648,7 @@ async def conversation_interrupt(update: Update, context: ContextTypes.DEFAULT_T
     pending-keyword state is dropped.
     """
     context.user_data.pop(_UD_DISTRICT_MAP, None)
+    context.user_data.pop(_UD_DISTRICT_NAMES, None)
     context.user_data.pop(_UD_SELECTED_DISTRICTS, None)
     if update.message is not None:
         await update.message.reply_text(

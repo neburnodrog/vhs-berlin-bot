@@ -188,6 +188,7 @@ These were called out during round-2 review but consciously deferred to their ow
 
 ### Phase 7 — deploy
 
+- [x] **Phase 7 UX nibble (2026-05-31)** — onboarding picker now shows human-readable Bezirk names ("Mitte", "Friedrichshain-Kreuzberg", ...) instead of bare numeric district ids ("31", "32"). New `parser.parse_district_names(html_bytes) -> dict[int, str]` reads the `<label for="...">` paired with each `CheckBoxListDistricts$N` checkbox; `_fetch_district_map` (handlers-side only) renamed to `_fetch_district_data` and now returns `(checkbox_map, names_map)` from a single GET so the two views can't drift. `build_district_keyboard` signature gains a `district_names` arg; callback_data shape (`toggle:<id>`) is unchanged so the toggle handler keeps its integer-keyed wire format. Defensive fallback: missing name → `str(district_id)`, missing label tag → same. `jobs._fetch_district_map` untouched (jobs path doesn't need names). 194 → 199 tests, ruff lint+format clean.
 - [ ] Dockerfile build locally: `docker build -t vhs-berlin-bot:dev . && docker run --rm -e TELEGRAM_BOT_TOKEN=... -e ALLOWED_USER_IDS=... -v /tmp/vhsdata:/data vhs-berlin-bot:dev`
 - [ ] Create Telegram bot via @BotFather, get token, set bot description + commands list
 - [ ] Get own Telegram user_id (via @userinfobot)

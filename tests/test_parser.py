@@ -201,3 +201,55 @@ def test_parse_district_map_excludes_alle_bezirke_sentinel(form_initial: bytes) 
     # The form's first district checkbox is "Alle Bezirke" with value="0";
     # callers must not be able to pass district_id=0 through validation.
     assert 0 not in parser.parse_district_map(form_initial)
+
+
+# --- parse_district_names --------------------------------------------------
+
+
+def test_parse_district_names_extracts_human_labels(form_initial: bytes) -> None:
+    # Anchors the full 12-Bezirk map plus the two VHS-internal cross-district
+    # rows the live site exposes. The "alle" sentinel (district_id=0) must
+    # NOT leak through — same exclusion rule as ``parse_district_map``.
+    # German diacritics must survive the windows-1252 → str decode round-trip;
+    # they go straight into a Telegram button label as UTF-8.
+    names = parser.parse_district_names(form_initial)
+    assert 0 not in names
+    assert names[31] == "Mitte"
+    assert names[32] == "Friedrichshain-Kreuzberg"
+    assert names[33] == "Pankow"
+    assert names[34] == "Charlottenburg-Wilmersdorf"
+    assert names[35] == "Spandau"
+    assert names[36] == "Steglitz-Zehlendorf"
+    assert names[37] == "Tempelhof-Schöneberg"
+    assert names[38] == "Neukölln"
+    assert names[39] == "Treptow-Köpenick"
+    assert names[40] == "Marzahn-Hellersdorf"
+    assert names[41] == "Lichtenberg"
+    assert names[42] == "Reinickendorf"
+    assert names[81] == "Servicezentrum und zentrale Prüfungen"
+    assert names[98] == "zentrale Kursleiterfortbildung"
+
+
+def test_parse_district_names_returns_empty_dict_on_empty_bytes() -> None:
+    assert parser.parse_district_names(b"") == {}
+
+
+def test_parse_district_names_falls_back_to_str_district_id_when_label_missing() -> None:
+    # Defensive: if a checkbox has no matching ``<label for="...">`` we must
+    # NOT blow up onboarding for the other districts — fall back to the
+    # string form of the district id for that one entry.
+    html = (
+        b"<html><body>"
+        b'<input id="ctl00_X_CheckBoxListDistricts_5" type="checkbox" '
+        b'name="ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$5" '
+        b'value="31">'
+        b'<label for="ctl00_X_CheckBoxListDistricts_5">Mitte</label>'
+        b'<input id="ctl00_X_CheckBoxListDistricts_6" type="checkbox" '
+        b'name="ctl00$Content$AreaListAdvanced1$CheckBoxListDistricts$6" '
+        b'value="39">'
+        # No <label for="..._6"> on purpose.
+        b"</body></html>"
+    )
+    names = parser.parse_district_names(html)
+    assert names[31] == "Mitte"
+    assert names[39] == "39"
