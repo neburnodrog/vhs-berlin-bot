@@ -63,6 +63,7 @@ from vhsbot._app_state import (
 )
 from vhsbot.config import Settings
 from vhsbot.db import (
+    BOOKABLE_AVAILABILITY,
     CourseSnapshot,
     all_active_user_ids,
     count_notifications_since,
@@ -308,6 +309,25 @@ async def _process_district_snapshots(
 
         if result not in ("new", "back_in_stock"):
             # Refresh last_seen_at so we observe staleness later.
+            async with locked_db(context):
+                upsert_seen_course(conn, snap, notified=False)
+            continue
+
+        # Phase 6 review BLOCKER fix: enforce "new+bookable" symmetrically
+        # with ``handlers._run_backfill``. The locked-design notification
+        # policy row reads "new+bookable OR full->bookable" — until now,
+        # ``daily_scan`` fired on every ``classify -> "new"`` regardless of
+        # availability, including ``belegt`` first sightings (asymmetric
+        # with the backfill path's ``BOOKABLE_AVAILABILITY`` filter).
+        #
+        # CRITICAL INVARIANT: even though we skip the send here, we MUST
+        # still upsert the course into ``seen_courses`` with
+        # ``notified=False``. Otherwise the next scan — where the same
+        # course flips to bookable — would have no prior state and
+        # ``classify()`` would return ``"new"`` AGAIN instead of the
+        # correct ``"back_in_stock"``, and the user would never hear
+        # about the cancellation that made the course available.
+        if result == "new" and snap.availability not in BOOKABLE_AVAILABILITY:
             async with locked_db(context):
                 upsert_seen_course(conn, snap, notified=False)
             continue

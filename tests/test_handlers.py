@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
+from conftest import _AsyncContextLock, _make_context
 from telegram import Chat, Message, Update, User
 from telegram.ext import (
     Application,
@@ -32,7 +33,7 @@ from telegram.ext import (
 )
 
 from vhsbot import db, handlers
-from vhsbot._app_state import BD_CLIENT, BD_DB, BD_DB_LOCK, BD_SETTINGS
+from vhsbot._app_state import BD_SETTINGS
 from vhsbot.config import Settings
 from vhsbot.db import CourseSnapshot
 
@@ -198,46 +199,10 @@ def _make_update(user_id: int, text: str | None = None) -> MagicMock:
     return update
 
 
-class _AsyncContextLock:
-    """Real-enough async lock that records ``__aenter__`` calls.
-
-    We can't use an ``asyncio.Lock`` directly without an event loop in
-    sync test fixtures, and ``AsyncMock`` swallows ``async with`` —
-    so we hand-roll a tiny one whose entry count we can assert on.
-    """
-
-    def __init__(self) -> None:
-        self.enter_count = 0
-        self.exit_count = 0
-
-    async def __aenter__(self) -> _AsyncContextLock:
-        self.enter_count += 1
-        return self
-
-    async def __aexit__(self, *exc: object) -> None:
-        self.exit_count += 1
-
-
-def _make_context(
-    *,
-    settings: Settings,
-    conn: sqlite3.Connection,
-    client: object,
-    args: list[str] | None = None,
-    db_lock: _AsyncContextLock | None = None,
-) -> MagicMock:
-    ctx = MagicMock()
-    ctx.bot = MagicMock()
-    ctx.bot.send_message = AsyncMock()
-    ctx.bot_data = {
-        BD_SETTINGS: settings,
-        BD_DB: conn,
-        BD_DB_LOCK: db_lock or _AsyncContextLock(),
-        BD_CLIENT: client,
-    }
-    ctx.args = args or []
-    ctx.user_data = {}
-    return ctx
+# ``_AsyncContextLock`` + ``_make_context`` live in :mod:`tests.conftest`
+# (imported at the top of this module) — they used to be inlined here, in
+# ``test_jobs.py``, and ``test_e2e.py`` with subtle divergences; the
+# Phase 6 review pass deduplicated them.
 
 
 class TestStartHandler:

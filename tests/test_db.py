@@ -333,3 +333,29 @@ def test_count_notifications_since_excludes_rows_outside_window(
         f"count_notifications_since must include the in-window row and exclude "
         f"the just-out-of-window row; got {count}"
     )
+
+
+def test_set_last_availability_overwrites_only_that_column(conn: sqlite3.Connection) -> None:
+    """``set_last_availability`` writes ``last_availability`` and nothing else.
+
+    Pin for the test-seam helper used by e2e tests to flip a course to
+    ``"belegt"`` so the next scan classifies it as ``back_in_stock``. It
+    must NOT touch ``last_seen_at``, ``last_notified_at``, or any other
+    column — those are owned by the production upsert path.
+    """
+    db.upsert_seen_course(conn, _snap(kurs_id=4000, availability=">2"), notified=True)
+    before = db.get_seen_course(conn, kurs_id=4000)
+    assert before is not None
+    assert before.last_availability == ">2"
+    assert before.last_notified_at is not None
+
+    db.set_last_availability(conn, kurs_id=4000, availability="belegt")
+
+    after = db.get_seen_course(conn, kurs_id=4000)
+    assert after is not None
+    assert after.last_availability == "belegt"
+    # Other columns untouched.
+    assert after.last_notified_at == before.last_notified_at
+    assert after.last_seen_at == before.last_seen_at
+    assert after.first_seen_at == before.first_seen_at
+    assert after.title == before.title

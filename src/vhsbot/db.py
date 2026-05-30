@@ -271,6 +271,24 @@ def mark_notified(conn: sqlite3.Connection, *, kurs_id: int) -> None:
         )
 
 
+def set_last_availability(
+    conn: sqlite3.Connection, *, kurs_id: int, availability: Availability
+) -> None:
+    """Overwrite the stored ``last_availability`` for one course.
+
+    Test-only seam used by the e2e tests to force a belegt -> bookable
+    transition on a course that the fixture reports as bookable. Lifted
+    out of ad-hoc raw SQL so the type system (``Availability`` literal)
+    can catch typos at call sites — a stuck typo would silently make
+    classify() raise on every future scan.
+    """
+    with conn:
+        conn.execute(
+            "UPDATE seen_courses SET last_availability = ? WHERE kurs_id = ?",
+            (availability, kurs_id),
+        )
+
+
 def upsert_seen_course(
     conn: sqlite3.Connection, snapshot: CourseSnapshot, *, notified: bool
 ) -> None:
