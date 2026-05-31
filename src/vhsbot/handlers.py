@@ -325,10 +325,11 @@ async def _run_backfill(
 
     sent = 0
     try:
-        snapshots = await scraper.crawl(
+        crawl_result = await scraper.crawl(
             client=client,
             district_ids=sorted(user_settings.districts),
             sleep_seconds=settings.scrape_sleep_seconds,
+            keyword=keyword,
         )
     except Exception:
         logger.exception("backfill failed for user=%s keyword=%r", user_id, keyword)
@@ -338,7 +339,7 @@ async def _run_backfill(
             )
         return sent
 
-    for snap in snapshots:
+    for snap in crawl_result.snapshots:
         if sent >= BACKFILL_CAP:
             break
         if snap.availability not in BOOKABLE_AVAILABILITY:
@@ -359,7 +360,18 @@ async def _run_backfill(
         sent += 1
 
     if update.message is not None:
-        await update.message.reply_text(f"Backfill fertig. {sent} Treffer gesendet.")
+        # The truncation note exists because the live "/watch goldschmiede"
+        # bug surfaced "0 Treffer gesendet" without any hint that the crawl
+        # had only seen the first N pages of a deep district. Surfacing the
+        # gap to the user lets them decide whether to retry, narrow their
+        # districts, or accept the partial result.
+        completion = f"Backfill fertig. {sent} Treffer gesendet."
+        if crawl_result.truncated:
+            completion += (
+                " Hinweis: Der Scan hat das Seiten-Limit erreicht; "
+                "möglicherweise wurden weitere Treffer nicht erfasst."
+            )
+        await update.message.reply_text(completion)
     return sent
 
 

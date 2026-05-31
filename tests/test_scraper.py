@@ -16,7 +16,7 @@ import pytest
 from conftest import FIXTURES, _FixtureTransport, _html_response
 
 from vhsbot.parser import parse_results_page
-from vhsbot.scraper import crawl, crawl_district
+from vhsbot.scraper import CrawlResult, crawl, crawl_district
 
 _NEXT_BTN_INPUT_RE = re.compile(
     rb'<input[^>]*name="ctl00\$Content\$ILDataGrid1\$ctl01\$ctl04"[^>]*>',
@@ -110,14 +110,16 @@ class _DedupTransport(httpx.AsyncBaseTransport):
 async def test_crawl_district_paginates_until_no_next_page() -> None:
     transport = _FixtureTransport()
     async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        snapshots = await crawl_district(
+        result = await crawl_district(
             client=client,
             district_checkbox_index=5,
             sleep_seconds=0,
         )
 
-    assert len(snapshots) == 30  # 3 result pages, 10 rows each
-    assert all(s.kurs_id > 0 for s in snapshots)
+    assert isinstance(result, CrawlResult)
+    assert len(result.snapshots) == 30  # 3 result pages, 10 rows each
+    assert all(s.kurs_id > 0 for s in result.snapshots)
+    assert result.truncated is False
 
     methods = [m for (m, _, _) in transport.calls]
     assert methods == ["GET", "POST", "POST", "POST", "POST"]
@@ -169,18 +171,20 @@ async def test_crawl_two_districts_dedups_by_kurs_id() -> None:
     """
     transport = _DedupTransport()
     async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        snapshots = await crawl(
+        result = await crawl(
             client=client,
             district_ids={31, 32},
             sleep_seconds=0,
         )
 
+    snapshots = result.snapshots
     kurs_ids = [s.kurs_id for s in snapshots]
 
     # (a) Result equals the union of both districts' id ranges.
     assert set(kurs_ids) == set(range(1000, 1015))
     # 15 unique ids total: 10 from district 31 + 5 non-overlapping from 32.
     assert len(snapshots) == 15
+    assert result.truncated is False
 
     # (b) Every id appears exactly once.
     assert len(kurs_ids) == len(set(kurs_ids))
@@ -218,7 +222,8 @@ async def test_crawl_empty_district_ids_returns_empty_list() -> None:
             sleep_seconds=0,
         )
 
-    assert result == []
+    assert result.snapshots == []
+    assert result.truncated is False
     # Short-circuit before issuing the initial GET — no network traffic at all.
     assert transport.calls == []
 
@@ -263,13 +268,14 @@ async def test_crawl_district_omits_raw_html_callback_by_default_remains_backwar
     """
     transport = _FixtureTransport()
     async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        snapshots = await crawl_district(
+        result = await crawl_district(
             client=client,
             district_checkbox_index=5,
             sleep_seconds=0,
         )
 
-    assert len(snapshots) == 30
+    assert len(result.snapshots) == 30
+    assert result.truncated is False
 
 
 async def test_crawl_omits_raw_html_callback_by_default_remains_backward_compat() -> None:
@@ -284,7 +290,7 @@ async def test_crawl_omits_raw_html_callback_by_default_remains_backward_compat(
     """
     transport = _FixtureTransport()
     async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        snapshots = await crawl(
+        result = await crawl(
             client=client,
             district_ids={31},
             sleep_seconds=0,
@@ -292,7 +298,8 @@ async def test_crawl_omits_raw_html_callback_by_default_remains_backward_compat(
 
     # Same shape as test_crawl_single_district_returns_all_snapshots:
     # 20 unique kurs_ids from page-1 + page-2 (page_2_stripped dedup'd out).
-    assert len(snapshots) == 20
+    assert len(result.snapshots) == 20
+    assert result.truncated is False
 
 
 async def test_crawl_single_district_returns_all_snapshots() -> None:
@@ -306,16 +313,18 @@ async def test_crawl_single_district_returns_all_snapshots() -> None:
     """
     transport = _FixtureTransport()
     async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
-        snapshots = await crawl(
+        result = await crawl(
             client=client,
             district_ids={31},
             sleep_seconds=0,
         )
 
+    snapshots = result.snapshots
     # page_1 (10 ids) + page_2 (10 disjoint ids); page_2_stripped repeats
     # page_2's ids and gets dedup'd out.
     assert len(snapshots) == 20
     assert all(s.kurs_id > 0 for s in snapshots)
+    assert result.truncated is False
 
     # The full union of page-1 and page-2 ids must be present.
     page_1 = (FIXTURES / "search-district-31-page-1.html").read_bytes()
@@ -324,3 +333,181 @@ async def test_crawl_single_district_returns_all_snapshots() -> None:
         c.kurs_id for c in parse_results_page(page_2)
     }
     assert {s.kurs_id for s in snapshots} == expected_ids
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 scraper fix: keyword early-exit + truncation surfacing
+# ---------------------------------------------------------------------------
+
+
+_DATAGRID_ROW_RE = re.compile(
+    rb'<tr class="DataGrid(Item|AlternatingItem)">.*?</tr>',
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+class _EmptyPage1Transport(httpx.AsyncBaseTransport):
+    """Serves a page-1 with zero result rows AND no next-arrow input.
+
+    Mimics what VHS Berlin returns when a rare keyword is sent in the
+    initial search POST: the server-side filter trims the result set to
+    something the page-1 grid can hold without paginating. The orchestrator
+    must early-exit after the search POST instead of paginating into pages
+    that don't exist.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, bytes]] = []
+        self._form_initial = (FIXTURES / "form-initial.html").read_bytes()
+        # Strip rows AND the next-arrow input so the page is empty + terminal.
+        page_1 = (FIXTURES / "search-district-31-page-1.html").read_bytes()
+        without_rows = _DATAGRID_ROW_RE.sub(b"", page_1)
+        assert without_rows != page_1, "stripping rows must mutate the page"
+        self._empty_page_1 = _NEXT_BTN_INPUT_RE.sub(b"", without_rows)
+        assert self._empty_page_1 != without_rows, (
+            "stripping next-arrow must mutate the page; empty fixture must terminate"
+        )
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        body = await request.aread()
+        url = str(request.url)
+        self.calls.append((request.method, url, body))
+
+        if request.method == "GET" and "CourseSearch.aspx" in url:
+            return _html_response(self._form_initial)
+        if request.method == "POST" and b"lbtnTab2=Erweitert" in body:
+            return _html_response(self._form_initial)
+        if request.method == "POST" and b"btnSearch=Suchen" in body:
+            return _html_response(self._empty_page_1)
+        if request.method == "POST" and b"ctl01%24ctl04.x=" in body:
+            # If we ever paginate here the early-exit is broken.
+            raise AssertionError(
+                f"early-exit broken: pagination POST reached the transport: {body[:200]!r}"
+            )
+        raise AssertionError(f"unexpected request: {request.method} {url} body={body[:200]!r}")
+
+
+class _InfinitePagesTransport(httpx.AsyncBaseTransport):
+    """Always returns a page that still has the next-arrow input.
+
+    Used to drive ``crawl_district`` into the ``_MAX_PAGES_GUARD`` branch so
+    we can pin the ``truncated=True`` signal. Page 1 carries 10 rows from
+    the captured fixture; every subsequent next-page POST returns the same
+    bytes (rows + next-arrow), so dedup is a non-issue here because the
+    orchestrator does not dedup within a single district. We assert on
+    truncation, not on snapshot count.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, bytes]] = []
+        self._form_initial = (FIXTURES / "form-initial.html").read_bytes()
+        self._page = (FIXTURES / "search-district-31-page-1.html").read_bytes()
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        body = await request.aread()
+        url = str(request.url)
+        self.calls.append((request.method, url, body))
+
+        if request.method == "GET" and "CourseSearch.aspx" in url:
+            return _html_response(self._form_initial)
+        if request.method == "POST" and b"lbtnTab2=Erweitert" in body:
+            return _html_response(self._form_initial)
+        if request.method == "POST" and b"btnSearch=Suchen" in body:
+            return _html_response(self._page)
+        if request.method == "POST" and b"ctl01%24ctl04.x=" in body:
+            return _html_response(self._page)
+        raise AssertionError(f"unexpected request: {request.method} {url} body={body[:200]!r}")
+
+
+async def test_crawl_district_with_keyword_early_exits_on_empty_page_one() -> None:
+    """Rare keyword -> server returns empty page-1 with no next-arrow.
+
+    ``crawl_district`` must early-exit after the search POST: no pagination
+    requests at all. The whole flow is exactly four requests
+    (GET + Erweitert + search), the empty result set comes back unchanged,
+    and ``truncated`` is False.
+    """
+    transport = _EmptyPage1Transport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        result = await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+            keyword="goldschmiede",
+        )
+
+    assert result.snapshots == []
+    assert result.truncated is False
+    # GET + Erweitert + search POST only; NO pagination POSTs.
+    methods = [m for (m, _, _) in transport.calls]
+    assert methods == ["GET", "POST", "POST"], (
+        f"early-exit must skip pagination; got method sequence {methods}"
+    )
+    # And the search POST carried the keyword (URL-encoded "goldschmiede").
+    search_body = transport.calls[-1][2]
+    assert b"txtSearchTerm=goldschmiede" in search_body
+
+
+async def test_crawl_district_with_keyword_still_paginates_when_results_exist() -> None:
+    """Keyword present but page-1 carries rows and next-arrow -> paginate as usual.
+
+    Pins that the early-exit is conditional on BOTH (a) zero rows AND
+    (b) no next-arrow. The fixture transport returns the real captured
+    page-1 (10 rows + next-arrow), so even with a keyword the orchestrator
+    must continue the paginated walk.
+    """
+    transport = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        result = await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+            keyword="yoga",
+        )
+
+    # Same 30 rows as the no-keyword paginated walk.
+    assert len(result.snapshots) == 30
+    assert result.truncated is False
+    methods = [m for (m, _, _) in transport.calls]
+    assert methods == ["GET", "POST", "POST", "POST", "POST"]
+
+
+async def test_crawl_district_marks_truncated_when_guard_hit() -> None:
+    """Infinite-next-arrow fixture must trip the page-guard and set truncated=True.
+
+    The WARNING log line still fires (kept deliberately so operators see
+    truncation in logs even without the structural signal), but the
+    structural signal is the ``truncated`` flag on the returned
+    :class:`CrawlResult`.
+    """
+    transport = _InfinitePagesTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        result = await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+        )
+
+    assert result.truncated is True, (
+        "hitting _MAX_PAGES_GUARD must surface as truncated=True so callers can warn"
+    )
+
+
+async def test_crawl_district_truncated_false_when_natural_end() -> None:
+    """Crawl that exhausts naturally before the guard must report truncated=False.
+
+    Companion to the truncated-True test: pins that ``truncated`` is NOT
+    a sticky default but is genuinely set only when the guard fires.
+    Uses the same fixture as the canonical paginates-until-no-next-page
+    case (3 result pages, natural terminator).
+    """
+    transport = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        result = await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+        )
+
+    assert result.truncated is False
+    assert len(result.snapshots) == 30

@@ -233,7 +233,7 @@ async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
     for district_id in sorted(districts):
         checkbox_index = district_map[district_id]
         try:
-            district_snapshots = await scraper.crawl_district(
+            district_result = await scraper.crawl_district(
                 client=client,
                 district_checkbox_index=checkbox_index,
                 sleep_seconds=settings.scrape_sleep_seconds,
@@ -246,11 +246,25 @@ async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
                 first_error = e
             continue
 
+        # Truncation is a silent under-count: the scan correctly persisted
+        # everything it saw, but the tail of this district's result set
+        # was dropped because we hit ``_MAX_PAGES_GUARD``. Surface it at
+        # WARNING so the operator notices, but do NOT abort or notify the
+        # user from the daily-scan path — the snapshots we DID see are
+        # still classified + dispatched as normal.
+        if district_result.truncated:
+            logger.warning(
+                "daily_scan: district %s crawl truncated at page guard %s; "
+                "snapshots from later pages dropped",
+                district_id,
+                scraper._MAX_PAGES_GUARD,
+            )
+
         # Dedup across districts (a course may legitimately appear in
         # several due to "Alle Bezirke"-style cross-tags); first-occurrence
         # wins, matching the all-districts ``scraper.crawl`` semantics.
         deduped: list[CourseSnapshot] = []
-        for snap in district_snapshots:
+        for snap in district_result.snapshots:
             if snap.kurs_id in seen_kurs_ids:
                 continue
             seen_kurs_ids.add(snap.kurs_id)

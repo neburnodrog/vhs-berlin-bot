@@ -29,6 +29,7 @@ from conftest import _make_context
 from vhsbot import db, jobs
 from vhsbot.config import Settings
 from vhsbot.db import CourseSnapshot
+from vhsbot.scraper import CrawlResult
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -120,7 +121,7 @@ def _patch_crawl(
         sleep_seconds: float,
         district_id: int | None = None,
         raw_html_callback: Callable[[int, int, bytes], None] | None = None,
-    ) -> list[CourseSnapshot]:
+    ) -> CrawlResult:
         assert district_id is not None
         if raw_html_callback is not None:
             html = b"<html>page-0 for district " + str(district_id).encode() + b"</html>"
@@ -130,8 +131,8 @@ def _patch_crawl(
         # Hand the snapshots to the FIRST district visited only.
         if not delivered:
             delivered[district_id] = True
-            return snapshots
-        return []
+            return CrawlResult(snapshots=snapshots, truncated=False)
+        return CrawlResult(snapshots=[], truncated=False)
 
     monkeypatch.setattr(jobs.scraper, "crawl_district", fake_crawl_district)
 
@@ -153,9 +154,9 @@ async def test_daily_scan_skips_when_no_active_users(
     # No user_settings rows -> union_active_districts() returns empty.
     crawl_called: list[bool] = []
 
-    async def boom_crawl(**kw: Any) -> list[CourseSnapshot]:
+    async def boom_crawl(**kw: Any) -> CrawlResult:
         crawl_called.append(True)
-        return []
+        return CrawlResult(snapshots=[], truncated=False)
 
     monkeypatch.setattr(jobs.scraper, "crawl", boom_crawl)
     ctx = _make_context(settings=settings, conn=conn)
@@ -392,7 +393,7 @@ async def test_daily_scan_reraises_exception_for_global_handler(
     db.upsert_user_settings(conn, user_id=111, districts=[31])
     db.add_subscription(conn, user_id=111, keyword="Yoga")
 
-    async def boom_crawl(**kw: Any) -> list[CourseSnapshot]:
+    async def boom_crawl(**kw: Any) -> CrawlResult:
         raise RuntimeError("VHS Berlin returned 503")
 
     monkeypatch.setattr(jobs.scraper, "crawl_district", boom_crawl)
@@ -488,9 +489,9 @@ async def test_daily_scan_partial_district_failure_persists_completed_state(
         sleep_seconds: float,
         district_id: int | None = None,
         raw_html_callback: Callable[[int, int, bytes], None] | None = None,
-    ) -> list[CourseSnapshot]:
+    ) -> CrawlResult:
         if district_id == 31:
-            return [snap_d31]
+            return CrawlResult(snapshots=[snap_d31], truncated=False)
         raise RuntimeError("district 32 exploded")
 
     # Monkeypatch BOTH crawl_district and the district map indirection used by crawl.
@@ -538,11 +539,11 @@ def _patch_crawl_district(
         sleep_seconds: float,
         district_id: int | None = None,
         raw_html_callback: Callable[[int, int, bytes], None] | None = None,
-    ) -> list[CourseSnapshot]:
+    ) -> CrawlResult:
         assert district_id is not None
         if raw_html_callback is not None:
             raw_html_callback(district_id, 0, b"<html>fake</html>")
-        return per_district_snapshots.get(district_id, [])
+        return CrawlResult(snapshots=per_district_snapshots.get(district_id, []), truncated=False)
 
     monkeypatch.setattr(jobs.scraper, "crawl_district", per_district)
 
@@ -1086,9 +1087,9 @@ async def test_daily_scan_and_backfill_symmetric_on_new_belegt(
     # in the test). _run_backfill calls scraper.crawl (NOT crawl_district),
     # so we patch the public crawl entry point.
     async def fake_crawl(
-        *, client: object, district_ids: object, sleep_seconds: float
-    ) -> list[CourseSnapshot]:
-        return snapshots
+        *, client: object, district_ids: object, sleep_seconds: float, keyword: str = ""
+    ) -> CrawlResult:
+        return CrawlResult(snapshots=snapshots, truncated=False)
 
     monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl)
 
@@ -1114,4 +1115,79 @@ async def test_daily_scan_and_backfill_symmetric_on_new_belegt(
         "daily_scan and _run_backfill must dispatch the same number of messages "
         f"for a new+belegt course; daily={daily_send_count!r}, "
         f"backfill={backfill_send_count!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Phase 7 scraper fix: daily_scan logs truncation per district
+# ---------------------------------------------------------------------------
+
+
+async def test_daily_scan_logs_warning_when_district_truncates(
+    settings: Settings,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A district whose crawl hits the page guard must log a WARNING that
+    names the district id, so an operator can see the silent under-count
+    in the daily scan path. The fan-out itself must still happen for
+    the snapshots we DID see — truncation never aborts the scan.
+
+    Critical: the warning must include the district id (raw int) so an
+    operator who sees the line in logs knows WHICH district truncated,
+    not just "some district somewhere".
+    """
+    import logging as _logging
+
+    db.upsert_user_settings(conn, user_id=111, districts=[31, 32])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    snap_d31 = _snap(kurs_id=8800, title="Yoga sanft", availability=">2", district="Mitte")
+
+    async def per_district(
+        *,
+        client: object,
+        district_checkbox_index: int,
+        sleep_seconds: float,
+        district_id: int | None = None,
+        raw_html_callback: Callable[[int, int, bytes], None] | None = None,
+    ) -> CrawlResult:
+        # District 31 truncated; district 32 clean.
+        if district_id == 31:
+            return CrawlResult(snapshots=[snap_d31], truncated=True)
+        return CrawlResult(snapshots=[], truncated=False)
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", per_district)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5, 32: 2}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+
+    ctx = _make_context(settings=settings, conn=conn)
+
+    with caplog.at_level(_logging.WARNING, logger="vhsbot.jobs"):
+        await jobs.daily_scan(ctx)
+
+    truncation_warnings = [
+        rec
+        for rec in caplog.records
+        if "truncated" in rec.message and rec.levelno >= _logging.WARNING
+    ]
+    assert truncation_warnings, (
+        "a truncated district must produce at least one WARNING-level log line; "
+        f"records were {[(r.levelname, r.message) for r in caplog.records]!r}"
+    )
+    # The warning must identify WHICH district truncated — operators
+    # reading the log can't act on "some district truncated".
+    rendered = " ".join(rec.getMessage() for rec in truncation_warnings)
+    assert "31" in rendered, (
+        f"truncation warning must include the district id (31); got {rendered!r}"
+    )
+
+    # And the scan still dispatched the snapshot we DID see.
+    assert ctx.bot.send_message.await_count == 1, (
+        "truncation never aborts the scan; snapshots already collected must still "
+        f"fan out as normal — got {ctx.bot.send_message.await_count} sends"
     )

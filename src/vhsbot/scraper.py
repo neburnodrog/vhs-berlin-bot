@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 
 import httpx
 
@@ -30,7 +31,30 @@ logger = logging.getLogger(__name__)
 _SEARCH_URL = "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseSearch.aspx"
 _RESULTS_URL = "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseList.aspx"
 _NEXT_PAGE_INPUT = "ctl00$Content$ILDataGrid1$ctl01$ctl04"
-_MAX_PAGES_GUARD = 50
+# Empirically Tempelhof-Schöneberg returns 81+ pages of empty-search results
+# (810+ courses); 150 is generous headroom that survives every known Berlin
+# Bezirk while still capping a runaway pagination loop. Callers must inspect
+# the returned ``CrawlResult.truncated`` flag — hitting this guard means the
+# tail of the result set was silently dropped, and surfacing that to the
+# user / scheduler matters more than the guard value itself.
+_MAX_PAGES_GUARD = 150
+
+
+@dataclass(frozen=True, slots=True)
+class CrawlResult:
+    """Outcome of a district crawl.
+
+    ``truncated`` is True iff the crawl stopped because it hit
+    ``_MAX_PAGES_GUARD`` rather than because the result set was exhausted.
+    Callers can surface this to the user / log so silent under-counting
+    doesn't happen — the original bug this guard exposed was a user
+    running ``/watch goldschmiede`` against Tempelhof-Schöneberg (81+
+    pages) and being told "0 Treffer gesendet" when the crawl had only
+    seen the first 50 pages.
+    """
+
+    snapshots: list[CourseSnapshot]
+    truncated: bool
 
 
 def _state_fields(state: FormState) -> dict[str, str]:
@@ -58,7 +82,8 @@ async def crawl_district(
     sleep_seconds: float = 2.0,
     district_id: int | None = None,
     raw_html_callback: RawHtmlCallback | None = None,
-) -> list[CourseSnapshot]:
+    keyword: str = "",
+) -> CrawlResult:
     """Run the full search flow for one district. Returns all paginated rows.
 
     If ``raw_html_callback`` is provided, it is invoked once per result
@@ -68,6 +93,24 @@ async def crawl_district(
     intermediate form-setup POSTs. ``district_id`` is passed through
     unchanged from the caller; if omitted it defaults to the checkbox
     index (only the caller knows the real district id).
+
+    ``keyword`` is sent as ``txtSearchTerm`` in the initial search POST.
+    VHS Berlin's server-side filter is more liberal than our own
+    :func:`vhsbot.matching.matches` (it returns false positives like
+    "Zimmerpflanzen — Sauerstoffspender" for keyword "goldschmiede"), so
+    callers MUST still run the local matcher on the returned snapshots
+    for correctness. The keyword exists purely as a pagination-budget
+    shrinker: when it hits a rare term, the server returns one short
+    page with no next-arrow, and we early-exit after a single fetch
+    instead of paginating through 80+ unfiltered pages. When the keyword
+    matches enough rows that the server paginates, we follow the
+    pagination as before and let the local matcher do the heavy lifting.
+
+    Returns a :class:`CrawlResult` whose ``truncated`` flag is True iff
+    the pagination loop exhausted ``_MAX_PAGES_GUARD`` without seeing a
+    "no next page" signal (i.e. the tail of the result set was silently
+    dropped). The WARNING log line still fires in that case; the flag
+    is the structural signal that callers can act on.
     """
     cb_district_id = district_id if district_id is not None else district_checkbox_index
 
@@ -93,7 +136,7 @@ async def crawl_district(
         data={
             **_state_fields(state),
             checkbox_field: "on",
-            "ctl00$Content$AdvancedSearch1$SearchBox1$txtSearchTerm": "",
+            "ctl00$Content$AdvancedSearch1$SearchBox1$txtSearchTerm": keyword,
             "ctl00$Content$btnSearch": "Suchen",
         },
     )
@@ -102,8 +145,18 @@ async def crawl_district(
     page_idx = 0
     if raw_html_callback is not None:
         raw_html_callback(cb_district_id, page_idx, resp.content)
-    snapshots: list[CourseSnapshot] = list(parse_results_page(resp.content))
+    page_1_rows = list(parse_results_page(resp.content))
+    snapshots: list[CourseSnapshot] = list(page_1_rows)
 
+    # Rare-keyword early-exit. VHS Berlin's server filters page 1 by the
+    # keyword we just sent; a rare term returns a short page with no
+    # next-arrow. Skipping the pagination loop in that case is a pure win
+    # (1 fetch vs 80+ on a deep district), with no correctness cost
+    # because we already have everything the server would have returned.
+    if keyword != "" and not page_1_rows and not has_next_page(resp.content):
+        return CrawlResult(snapshots=snapshots, truncated=False)
+
+    truncated = False
     for _ in range(_MAX_PAGES_GUARD):
         if not has_next_page(resp.content):
             break
@@ -123,8 +176,9 @@ async def crawl_district(
         snapshots.extend(parse_results_page(resp.content))
     else:
         logger.warning("crawl_district hit max-pages guard (%s); stopping", _MAX_PAGES_GUARD)
+        truncated = True
 
-    return snapshots
+    return CrawlResult(snapshots=snapshots, truncated=truncated)
 
 
 async def crawl(
@@ -133,7 +187,8 @@ async def crawl(
     district_ids: Iterable[int],
     sleep_seconds: float = 2.0,
     raw_html_callback: RawHtmlCallback | None = None,
-) -> list[CourseSnapshot]:
+    keyword: str = "",
+) -> CrawlResult:
     """Scrape multiple districts and return a dedup'd snapshot list.
 
     Performs one initial GET to build the ``district_id -> checkbox_index``
@@ -142,8 +197,14 @@ async def crawl(
     dedup'd by ``kurs_id`` with first-occurrence wins (sorted district
     order makes the choice deterministic).
 
-    An empty ``district_ids`` short-circuits to ``[]`` with no network
-    activity.
+    An empty ``district_ids`` short-circuits to ``CrawlResult([], False)``
+    with no network activity.
+
+    ``keyword`` is threaded through to :func:`crawl_district` for the
+    rare-term pagination-budget shrinker. ``CrawlResult.truncated`` here
+    is True iff *any* district truncated during the sweep — a single
+    truncated district means the union result set is incomplete and the
+    caller should surface that.
 
     Note on sleeps: this function sleeps ``sleep_seconds`` between
     per-district crawls, and ``crawl_district`` itself sleeps
@@ -154,7 +215,7 @@ async def crawl(
     """
     requested = sorted(set(district_ids))
     if not requested:
-        return []
+        return CrawlResult(snapshots=[], truncated=False)
 
     initial = await client.get(_SEARCH_URL)
     district_map = parse_district_map(initial.content)
@@ -165,20 +226,24 @@ async def crawl(
 
     seen_kurs_ids: set[int] = set()
     out: list[CourseSnapshot] = []
+    any_truncated = False
     for i, district_id in enumerate(requested):
         if i > 0:
             await _sleep(sleep_seconds)
         checkbox_index = district_map[district_id]
-        snapshots = await crawl_district(
+        district_result = await crawl_district(
             client=client,
             district_checkbox_index=checkbox_index,
             sleep_seconds=sleep_seconds,
             district_id=district_id,
             raw_html_callback=raw_html_callback,
+            keyword=keyword,
         )
-        for snap in snapshots:
+        if district_result.truncated:
+            any_truncated = True
+        for snap in district_result.snapshots:
             if snap.kurs_id in seen_kurs_ids:
                 continue
             seen_kurs_ids.add(snap.kurs_id)
             out.append(snap)
-    return out
+    return CrawlResult(snapshots=out, truncated=any_truncated)
