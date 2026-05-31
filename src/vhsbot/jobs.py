@@ -233,6 +233,15 @@ async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
     for district_id in sorted(districts):
         checkbox_index = district_map[district_id]
         try:
+            # NB: deliberately no ``keyword=`` here — daily_scan fans out
+            # N user keywords across one shared crawl; the server-side
+            # filter (``txtSearchTerm``) can only narrow on a single term
+            # and cannot narrow a multi-keyword union, so passing one
+            # user's keyword would silently filter out the matches the
+            # OTHER users were waiting for. The bot's client-side
+            # ``matching.matches()`` handles filtering downstream.
+            # ``_run_backfill``'s single-keyword path IS allowed to pass
+            # ``keyword=`` because it serves exactly one user/keyword pair.
             district_result = await scraper.crawl_district(
                 client=client,
                 district_checkbox_index=checkbox_index,
@@ -248,7 +257,7 @@ async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
 
         # Truncation is a silent under-count: the scan correctly persisted
         # everything it saw, but the tail of this district's result set
-        # was dropped because we hit ``_MAX_PAGES_GUARD``. Surface it at
+        # was dropped because we hit ``MAX_PAGES_GUARD``. Surface it at
         # WARNING so the operator notices, but do NOT abort or notify the
         # user from the daily-scan path — the snapshots we DID see are
         # still classified + dispatched as normal.
@@ -257,7 +266,7 @@ async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
                 "daily_scan: district %s crawl truncated at page guard %s; "
                 "snapshots from later pages dropped",
                 district_id,
-                scraper._MAX_PAGES_GUARD,
+                scraper.MAX_PAGES_GUARD,
             )
 
         # Dedup across districts (a course may legitimately appear in

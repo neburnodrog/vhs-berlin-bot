@@ -15,8 +15,9 @@ import httpx
 import pytest
 from conftest import FIXTURES, _FixtureTransport, _html_response
 
+from vhsbot import scraper
 from vhsbot.parser import parse_results_page
-from vhsbot.scraper import CrawlResult, crawl, crawl_district
+from vhsbot.scraper import MAX_PAGES_GUARD, CrawlResult, crawl, crawl_district
 
 _NEXT_BTN_INPUT_RE = re.compile(
     rb'<input[^>]*name="ctl00\$Content\$ILDataGrid1\$ctl01\$ctl04"[^>]*>',
@@ -138,7 +139,13 @@ async def test_search_post_uses_real_submit_button_and_district_checkbox() -> No
 
     assert b"btnSearch=Suchen" in search_post_body
     assert b"CheckBoxListDistricts%245=on" in search_post_body
-    assert b"txtSearchTerm=" in search_post_body
+    # Default ``keyword=""`` -> empty ``txtSearchTerm`` value. Tighter than
+    # a bare ``b"txtSearchTerm="`` match (which would also pass against
+    # ``txtSearchTerm=goldschmiede``); we want this test to fail if a
+    # future refactor accidentally starts forwarding a non-empty default.
+    assert b"txtSearchTerm=&" in search_post_body or search_post_body.endswith(b"txtSearchTerm="), (
+        f"empty default keyword must serialize as empty txtSearchTerm: {search_post_body[-80:]!r}"
+    )
     assert b"__VIEWSTATE=" in search_post_body
     assert b"__VIEWSTATEGENERATOR=" in search_post_body
 
@@ -222,7 +229,7 @@ async def test_crawl_empty_district_ids_returns_empty_list() -> None:
             sleep_seconds=0,
         )
 
-    assert result.snapshots == []
+    assert result.snapshots == ()
     assert result.truncated is False
     # Short-circuit before issuing the initial GET — no network traffic at all.
     assert transport.calls == []
@@ -436,7 +443,7 @@ async def test_crawl_district_with_keyword_early_exits_on_empty_page_one() -> No
             keyword="goldschmiede",
         )
 
-    assert result.snapshots == []
+    assert result.snapshots == ()
     assert result.truncated is False
     # GET + Erweitert + search POST only; NO pagination POSTs.
     methods = [m for (m, _, _) in transport.calls]
@@ -511,3 +518,286 @@ async def test_crawl_district_truncated_false_when_natural_end() -> None:
 
     assert result.truncated is False
     assert len(result.snapshots) == 30
+
+
+class _ExactlyGuardBoundaryTransport(httpx.AsyncBaseTransport):
+    """Serves exactly ``MAX_PAGES_GUARD + 1`` pages, last one with no next-arrow.
+
+    Used to pin the for/else boundary fix: the orchestrator's
+    ``for _ in range(MAX_PAGES_GUARD)`` loop runs ``MAX_PAGES_GUARD``
+    *next-page* iterations on top of the initial search POST. When the
+    result set's natural terminator lands on the page returned by the
+    final iteration (the GUARD-th next-page POST), the loop exhausts
+    without ``break`` even though there is no further page to fetch.
+    The naive ``for/else`` would falsely report ``truncated=True``; the
+    fix re-checks ``has_next_page`` on the final response and only
+    sets ``truncated=True`` when a next-page genuinely exists.
+    """
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, bytes]] = []
+        self._form_initial = (FIXTURES / "form-initial.html").read_bytes()
+        self._page_with_next = (FIXTURES / "search-district-31-page-1.html").read_bytes()
+        self._page_without_next = _NEXT_BTN_INPUT_RE.sub(b"", self._page_with_next)
+        assert self._page_without_next != self._page_with_next, (
+            "stripping next-arrow must mutate the page"
+        )
+        # Search POST returns page 1 (with next-arrow). Then we expect
+        # MAX_PAGES_GUARD next-page POSTs. The first MAX_PAGES_GUARD-1
+        # of those return pages with the next-arrow; the LAST one (the
+        # GUARD-th iteration) returns the terminator page (no next-arrow).
+        # Total result pages: 1 + MAX_PAGES_GUARD = MAX_PAGES_GUARD + 1.
+        self._next_page_count = 0
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        body = await request.aread()
+        url = str(request.url)
+        self.calls.append((request.method, url, body))
+
+        if request.method == "GET" and "CourseSearch.aspx" in url:
+            return _html_response(self._form_initial)
+        if request.method == "POST" and b"lbtnTab2=Erweitert" in body:
+            return _html_response(self._form_initial)
+        if request.method == "POST" and b"btnSearch=Suchen" in body:
+            return _html_response(self._page_with_next)
+        if request.method == "POST" and b"ctl01%24ctl04.x=" in body:
+            self._next_page_count += 1
+            # The GUARD-th next-page POST returns the terminator page.
+            if self._next_page_count == MAX_PAGES_GUARD:
+                return _html_response(self._page_without_next)
+            return _html_response(self._page_with_next)
+        raise AssertionError(f"unexpected request: {request.method} {url} body={body[:200]!r}")
+
+
+async def test_crawl_district_truncated_false_when_natural_end_at_guard_boundary() -> None:
+    """Boundary: result set of EXACTLY ``MAX_PAGES_GUARD + 1`` pages with the
+    final page carrying no next-arrow must NOT report ``truncated=True``.
+
+    The naive ``for/else`` implementation would falsely flag this case as
+    truncated, because the loop exhausts ``range(MAX_PAGES_GUARD)`` without
+    a ``break`` -- but the final response already terminates the result
+    set, so the user/scheduler should NOT see a "tail dropped" warning.
+
+    The fix is to re-inspect ``has_next_page`` on the last response after
+    the loop exhausts, and only mark ``truncated=True`` when a next page
+    genuinely exists.
+    """
+    transport = _ExactlyGuardBoundaryTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        result = await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+        )
+
+    assert result.truncated is False, (
+        "result set whose natural terminator lands on the GUARD-th next-page "
+        "must not be flagged truncated (boundary false-positive)"
+    )
+    # Sanity: the transport actually served the full budget.
+    # 2 setup POSTs (Erweitert + search) + MAX_PAGES_GUARD next-page POSTs.
+    next_page_post_count = sum(
+        1 for (m, _, b) in transport.calls if m == "POST" and b"ctl01%24ctl04.x=" in b
+    )
+    assert next_page_post_count == MAX_PAGES_GUARD, (
+        f"transport should serve exactly {MAX_PAGES_GUARD} next-page POSTs; "
+        f"got {next_page_post_count}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Round 2: multi-district aggregation + truth-table coverage + sanity pins
+# ---------------------------------------------------------------------------
+
+
+class _PerDistrictBehaviourTransport(httpx.AsyncBaseTransport):
+    """Two-district transport with per-district behaviour.
+
+    The first district to be searched (whichever checkbox index it carries)
+    terminates naturally after a single page. The second district enters
+    an infinite-next-arrow loop so it trips the page guard.
+
+    The aggregation contract under test is:
+
+    * ``CrawlResult.truncated`` flips to True for the multi-district
+      crawl iff ANY district truncated.
+    * Snapshots from the cleanly-terminating district are still present
+      in the aggregate result; truncation of one district does not drop
+      another's data.
+    """
+
+    _INFINITE_INDEX = 2  # district 32 in our standard test mapping
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, bytes]] = []
+        self._form_initial = (FIXTURES / "form-initial.html").read_bytes()
+        page_1 = (FIXTURES / "search-district-31-page-1.html").read_bytes()
+        self._page_with_next = page_1
+        self._page_without_next = _NEXT_BTN_INPUT_RE.sub(b"", page_1)
+        assert self._page_without_next != page_1, "next-arrow strip must mutate"
+        self._last_checkbox_idx: int | None = None
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        body = await request.aread()
+        url = str(request.url)
+        self.calls.append((request.method, url, body))
+
+        if request.method == "GET" and "CourseSearch.aspx" in url:
+            return _html_response(self._form_initial)
+        if request.method == "POST" and b"lbtnTab2=Erweitert" in body:
+            return _html_response(self._form_initial)
+        if request.method == "POST" and b"btnSearch=Suchen" in body:
+            match = _CHECKBOX_IDX_RE.search(body)
+            if match is None:
+                raise AssertionError(f"search POST missing district checkbox: {body[:200]!r}")
+            self._last_checkbox_idx = int(match.group(1))
+            # Infinite-pages district keeps the next-arrow; clean district drops it.
+            if self._last_checkbox_idx == self._INFINITE_INDEX:
+                return _html_response(self._page_with_next)
+            return _html_response(self._page_without_next)
+        if request.method == "POST" and b"ctl01%24ctl04.x=" in body:
+            # Only the infinite-pages district paginates; it always returns
+            # next-arrow.
+            return _html_response(self._page_with_next)
+        raise AssertionError(f"unexpected request: {request.method} {url} body={body[:200]!r}")
+
+
+async def test_crawl_aggregates_truncated_true_when_any_district_truncates() -> None:
+    """Multi-district aggregation: one truncated district -> aggregate truncated.
+
+    District 31 (checkbox idx 5 in the captured form-initial) terminates
+    after one page; district 32 (checkbox idx 2) tips into the infinite
+    loop. The aggregate must (a) flip ``truncated=True``, AND (b) still
+    carry district 31's snapshots — truncation in one district must NOT
+    drop another's data.
+    """
+    transport = _PerDistrictBehaviourTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        result = await crawl(
+            client=client,
+            district_ids={31, 32},
+            sleep_seconds=0,
+        )
+
+    assert result.truncated is True, (
+        "aggregate truncated flag must flip when ANY district truncates"
+    )
+    # District 31's clean page-1 carries 10 captured snapshots; with district
+    # 32 also serving the same fixture (paginated), the dedup keeps the
+    # first-occurrence ones (district 31 sorts first). What we MUST see is
+    # at least the 10 rows from the cleanly-terminating district.
+    assert len(result.snapshots) >= 10, (
+        "snapshots from the cleanly-terminating district must still be present"
+    )
+
+
+async def test_crawl_aggregates_truncated_false_when_all_districts_terminate() -> None:
+    """Companion to the any-truncated test: all clean -> aggregate clean.
+
+    Uses the standard fixture transport for both districts (3 result pages
+    each, natural terminator). Aggregate ``truncated`` is False because no
+    district hit the guard.
+    """
+    transport = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        result = await crawl(
+            client=client,
+            district_ids={31},
+            sleep_seconds=0,
+        )
+
+    assert result.truncated is False
+
+
+async def test_crawl_district_with_keyword_does_not_early_exit_when_page_one_has_results() -> None:
+    """Truth-table case: keyword + page-1 with rows + no next-arrow.
+
+    Early-exit must fire only on the (empty page + no next) case. Here
+    page-1 carries rows AND lacks a next-arrow, so the orchestrator must
+    still return after one fetch (no pagination), but with the page-1
+    rows preserved.
+
+    This closes the missing case in the existing truth-table coverage:
+    * (empty + no-next) -> early-exit returns []
+    * (rows + has-next) -> paginates
+    * (rows + no-next)  -> THIS test: no early-exit (because rows exist),
+      but no pagination either (because no next-arrow); single fetch.
+    """
+
+    class _RowsButTerminalTransport(httpx.AsyncBaseTransport):
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, bytes]] = []
+            self._form_initial = (FIXTURES / "form-initial.html").read_bytes()
+            page_1 = (FIXTURES / "search-district-31-page-1.html").read_bytes()
+            self._page_with_rows_no_next = _NEXT_BTN_INPUT_RE.sub(b"", page_1)
+            assert self._page_with_rows_no_next != page_1
+
+        async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+            body = await request.aread()
+            url = str(request.url)
+            self.calls.append((request.method, url, body))
+
+            if request.method == "GET" and "CourseSearch.aspx" in url:
+                return _html_response(self._form_initial)
+            if request.method == "POST" and b"lbtnTab2=Erweitert" in body:
+                return _html_response(self._form_initial)
+            if request.method == "POST" and b"btnSearch=Suchen" in body:
+                return _html_response(self._page_with_rows_no_next)
+            if request.method == "POST" and b"ctl01%24ctl04.x=" in body:
+                raise AssertionError(
+                    "no pagination expected when page-1 has rows but no next-arrow"
+                )
+            raise AssertionError(f"unexpected request: {request.method} {url}")
+
+    transport = _RowsButTerminalTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        result = await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+            keyword="yoga",
+        )
+
+    assert len(result.snapshots) > 0, "page-1 rows must be preserved"
+    assert result.truncated is False
+    methods = [m for (m, _, _) in transport.calls]
+    # GET + Erweitert POST + search POST only; no pagination.
+    assert methods == ["GET", "POST", "POST"], (
+        f"single fetch expected when page-1 has rows + no next; got {methods}"
+    )
+
+
+def test_max_pages_guard_covers_known_largest_bezirk() -> None:
+    """Sanity pin: a future revert to a small guard must break this test.
+
+    Tempelhof-Schöneberg empirically returns 81+ pages of empty-search
+    results; the guard must give comfortable headroom or the daily scan
+    silently truncates. 150 is the value Phase 7 settled on; the lower
+    bound here keeps a generous safety margin while still catching any
+    accidental revert to (e.g.) 50.
+    """
+    assert scraper.MAX_PAGES_GUARD >= 150
+
+
+async def test_search_post_with_explicit_keyword_forwards_term() -> None:
+    """Companion to the empty-keyword default test.
+
+    Pin that a non-empty ``keyword=`` is forwarded into ``txtSearchTerm``
+    in the search POST body verbatim (URL-encoded). Closes the "keyword
+    forwarding has no test" gap flagged in the round-2 review.
+    """
+    transport = _FixtureTransport()
+    async with httpx.AsyncClient(transport=transport, follow_redirects=True) as client:
+        await crawl_district(
+            client=client,
+            district_checkbox_index=5,
+            sleep_seconds=0,
+            keyword="goldschmiede",
+        )
+
+    search_post_body = next(
+        body
+        for (method, _, body) in transport.calls
+        if method == "POST" and b"btnSearch=Suchen" in body
+    )
+    assert b"txtSearchTerm=goldschmiede" in search_post_body

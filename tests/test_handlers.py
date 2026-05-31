@@ -16,7 +16,7 @@ Three groups:
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable
 from datetime import datetime, time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -36,7 +36,31 @@ from vhsbot import db, handlers
 from vhsbot._app_state import BD_SETTINGS
 from vhsbot.config import Settings
 from vhsbot.db import CourseSnapshot
+from vhsbot.handlers import _TRUNCATION_NOTE
 from vhsbot.scraper import CrawlResult
+
+
+def _stub_crawl(
+    snapshots: list[CourseSnapshot] | tuple[CourseSnapshot, ...] = (),
+    *,
+    truncated: bool = False,
+) -> Callable[..., Awaitable[CrawlResult]]:
+    """Build an async stub for ``scraper.crawl`` that returns a fixed result.
+
+    Accepts and discards the real signature's kwargs (``client``,
+    ``district_ids``, ``sleep_seconds``, ``keyword``) so individual tests
+    don't need to repeat the boilerplate. The returned ``CrawlResult``
+    snapshots are always coerced to a tuple to match the production
+    immutable shape.
+    """
+
+    snapshots_t = tuple(snapshots)
+
+    async def _fake(**_kwargs: object) -> CrawlResult:
+        return CrawlResult(snapshots=snapshots_t, truncated=truncated)
+
+    return _fake
+
 
 # ---------------------------------------------------------------------------
 # Pure-function tests
@@ -332,29 +356,18 @@ class TestWatchHandler:
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object(), args=["Yoga"])
 
-        async def fake_crawl(
-            *,
-            client: object,
-            district_ids: Iterable[int],
-            sleep_seconds: float,
-            keyword: str = "",
-        ) -> CrawlResult:
-            return CrawlResult(
-                snapshots=[
-                    CourseSnapshot(
-                        kurs_id=1,
-                        title="Yoga sanft",
-                        course_number="Mi251-001K",
-                        district="Mitte",
-                        venue=None,
-                        date_range="01.06.2026",
-                        availability=">2",
-                    ),
-                ],
-                truncated=False,
-            )
-
-        monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl)
+        single_snap = [
+            CourseSnapshot(
+                kurs_id=1,
+                title="Yoga sanft",
+                course_number="Mi251-001K",
+                district="Mitte",
+                venue=None,
+                date_range="01.06.2026",
+                availability=">2",
+            ),
+        ]
+        monkeypatch.setattr(handlers.scraper, "crawl", _stub_crawl(single_snap))
 
         await handlers.watch(update, ctx)
 
@@ -372,30 +385,19 @@ class TestWatchHandler:
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object(), args=["Yoga"])
 
-        async def fake_crawl_many(
-            *,
-            client: object,
-            district_ids: Iterable[int],
-            sleep_seconds: float,
-            keyword: str = "",
-        ) -> CrawlResult:
-            return CrawlResult(
-                snapshots=[
-                    CourseSnapshot(
-                        kurs_id=i,
-                        title=f"Yoga {i}",
-                        course_number=f"Mi251-{i:03d}K",
-                        district="Mitte",
-                        venue=None,
-                        date_range="01.06.2026",
-                        availability=">2",
-                    )
-                    for i in range(30)
-                ],
-                truncated=False,
+        many_snaps = [
+            CourseSnapshot(
+                kurs_id=i,
+                title=f"Yoga {i}",
+                course_number=f"Mi251-{i:03d}K",
+                district="Mitte",
+                venue=None,
+                date_range="01.06.2026",
+                availability=">2",
             )
-
-        monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl_many)
+            for i in range(30)
+        ]
+        monkeypatch.setattr(handlers.scraper, "crawl", _stub_crawl(many_snaps))
 
         await handlers.watch(update, ctx)
 
@@ -422,30 +424,19 @@ class TestWatchHandler:
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object(), args=["Yoga"])
 
-        async def fake_crawl(
-            *,
-            client: object,
-            district_ids: Iterable[int],
-            sleep_seconds: float,
-            keyword: str = "",
-        ) -> CrawlResult:
-            return CrawlResult(
-                snapshots=[
-                    CourseSnapshot(
-                        kurs_id=i,
-                        title=f"Yoga {i}",
-                        course_number=f"Mi251-{i:03d}K",
-                        district="Mitte",
-                        venue=None,
-                        date_range="01.06.2026",
-                        availability=">2",
-                    )
-                    for i in range(total)
-                ],
-                truncated=False,
+        boundary_snaps = [
+            CourseSnapshot(
+                kurs_id=i,
+                title=f"Yoga {i}",
+                course_number=f"Mi251-{i:03d}K",
+                district="Mitte",
+                venue=None,
+                date_range="01.06.2026",
+                availability=">2",
             )
-
-        monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl)
+            for i in range(total)
+        ]
+        monkeypatch.setattr(handlers.scraper, "crawl", _stub_crawl(boundary_snaps))
         await handlers.watch(update, ctx)
         assert ctx.bot.send_message.await_count == expected
 
@@ -463,31 +454,19 @@ class TestWatchHandler:
         # 30 snapshots, half bookable, half "belegt". Expected: 15 sent (the
         # bookable half).
         availabilities = [">2", "belegt"] * 15
-
-        async def fake_crawl(
-            *,
-            client: object,
-            district_ids: Iterable[int],
-            sleep_seconds: float,
-            keyword: str = "",
-        ) -> CrawlResult:
-            return CrawlResult(
-                snapshots=[
-                    CourseSnapshot(
-                        kurs_id=i,
-                        title=f"Yoga {i}",
-                        course_number=f"Mi251-{i:03d}K",
-                        district="Mitte",
-                        venue=None,
-                        date_range="01.06.2026",
-                        availability=availabilities[i],
-                    )
-                    for i in range(30)
-                ],
-                truncated=False,
+        mixed_snaps = [
+            CourseSnapshot(
+                kurs_id=i,
+                title=f"Yoga {i}",
+                course_number=f"Mi251-{i:03d}K",
+                district="Mitte",
+                venue=None,
+                date_range="01.06.2026",
+                availability=availabilities[i],
             )
-
-        monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl)
+            for i in range(30)
+        ]
+        monkeypatch.setattr(handlers.scraper, "crawl", _stub_crawl(mixed_snaps))
         await handlers.watch(update, ctx)
         # 15 bookable in the input → 15 sent (the cap is also 15, fine).
         assert ctx.bot.send_message.await_count == 15
@@ -505,13 +484,7 @@ class TestWatchHandler:
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object(), args=["Yoga"])
 
-        async def boom(
-            *,
-            client: object,
-            district_ids: Iterable[int],
-            sleep_seconds: float,
-            keyword: str = "",
-        ) -> CrawlResult:
+        async def boom(**_kwargs: object) -> CrawlResult:
             raise RuntimeError("VHS Berlin returned 503")
 
         monkeypatch.setattr(handlers.scraper, "crawl", boom)
@@ -546,16 +519,7 @@ class TestWatchHandler:
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object(), args=["Yoga"])
 
-        async def fake_crawl(
-            *,
-            client: object,
-            district_ids: Iterable[int],
-            sleep_seconds: float,
-            keyword: str = "",
-        ) -> CrawlResult:
-            return CrawlResult(snapshots=[], truncated=True)
-
-        monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl)
+        monkeypatch.setattr(handlers.scraper, "crawl", _stub_crawl([], truncated=True))
 
         await handlers.watch(update, ctx)
 
@@ -564,7 +528,7 @@ class TestWatchHandler:
         assert completion is not None, (
             f"backfill must always emit a completion message; reply chain was {replies!r}"
         )
-        assert "Seiten-Limit" in completion, (
+        assert _TRUNCATION_NOTE in completion, (
             "truncated=True backfill MUST surface the page-limit note to the user "
             f"so they don't get silently under-counted; got {completion!r}"
         )
@@ -583,23 +547,14 @@ class TestWatchHandler:
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object(), args=["Yoga"])
 
-        async def fake_crawl(
-            *,
-            client: object,
-            district_ids: Iterable[int],
-            sleep_seconds: float,
-            keyword: str = "",
-        ) -> CrawlResult:
-            return CrawlResult(snapshots=[], truncated=False)
-
-        monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl)
+        monkeypatch.setattr(handlers.scraper, "crawl", _stub_crawl([], truncated=False))
 
         await handlers.watch(update, ctx)
 
         replies = [call.args[0] for call in update.message.reply_text.await_args_list]
         completion = next((r for r in replies if "Treffer gesendet" in r), None)
         assert completion is not None
-        assert "Seiten-Limit" not in completion, (
+        assert _TRUNCATION_NOTE not in completion, (
             "clean (non-truncated) crawl must NOT include the page-limit warning; "
             f"got {completion!r}"
         )

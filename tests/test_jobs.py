@@ -131,8 +131,8 @@ def _patch_crawl(
         # Hand the snapshots to the FIRST district visited only.
         if not delivered:
             delivered[district_id] = True
-            return CrawlResult(snapshots=snapshots, truncated=False)
-        return CrawlResult(snapshots=[], truncated=False)
+            return CrawlResult(snapshots=tuple(snapshots), truncated=False)
+        return CrawlResult(snapshots=(), truncated=False)
 
     monkeypatch.setattr(jobs.scraper, "crawl_district", fake_crawl_district)
 
@@ -156,7 +156,7 @@ async def test_daily_scan_skips_when_no_active_users(
 
     async def boom_crawl(**kw: Any) -> CrawlResult:
         crawl_called.append(True)
-        return CrawlResult(snapshots=[], truncated=False)
+        return CrawlResult(snapshots=(), truncated=False)
 
     monkeypatch.setattr(jobs.scraper, "crawl", boom_crawl)
     ctx = _make_context(settings=settings, conn=conn)
@@ -491,7 +491,7 @@ async def test_daily_scan_partial_district_failure_persists_completed_state(
         raw_html_callback: Callable[[int, int, bytes], None] | None = None,
     ) -> CrawlResult:
         if district_id == 31:
-            return CrawlResult(snapshots=[snap_d31], truncated=False)
+            return CrawlResult(snapshots=(snap_d31,), truncated=False)
         raise RuntimeError("district 32 exploded")
 
     # Monkeypatch BOTH crawl_district and the district map indirection used by crawl.
@@ -543,7 +543,9 @@ def _patch_crawl_district(
         assert district_id is not None
         if raw_html_callback is not None:
             raw_html_callback(district_id, 0, b"<html>fake</html>")
-        return CrawlResult(snapshots=per_district_snapshots.get(district_id, []), truncated=False)
+        return CrawlResult(
+            snapshots=tuple(per_district_snapshots.get(district_id, [])), truncated=False
+        )
 
     monkeypatch.setattr(jobs.scraper, "crawl_district", per_district)
 
@@ -1089,7 +1091,7 @@ async def test_daily_scan_and_backfill_symmetric_on_new_belegt(
     async def fake_crawl(
         *, client: object, district_ids: object, sleep_seconds: float, keyword: str = ""
     ) -> CrawlResult:
-        return CrawlResult(snapshots=snapshots, truncated=False)
+        return CrawlResult(snapshots=tuple(snapshots), truncated=False)
 
     monkeypatch.setattr(handlers.scraper, "crawl", fake_crawl)
 
@@ -1155,15 +1157,18 @@ async def test_daily_scan_logs_warning_when_district_truncates(
     ) -> CrawlResult:
         # District 31 truncated; district 32 clean.
         if district_id == 31:
-            return CrawlResult(snapshots=[snap_d31], truncated=True)
-        return CrawlResult(snapshots=[], truncated=False)
+            return CrawlResult(snapshots=(snap_d31,), truncated=True)
+        return CrawlResult(snapshots=(), truncated=False)
 
     monkeypatch.setattr(jobs.scraper, "crawl_district", per_district)
 
     async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
         return {31: 5, 32: 2}
 
-    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+    # ``raising=False`` was removed: ``_fetch_district_map`` exists in
+    # ``jobs.py``, so the monkeypatch should fail loudly if a future rename
+    # breaks the seam rather than silently no-op.
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map)
 
     ctx = _make_context(settings=settings, conn=conn)
 
@@ -1191,3 +1196,56 @@ async def test_daily_scan_logs_warning_when_district_truncates(
         "truncation never aborts the scan; snapshots already collected must still "
         f"fan out as normal — got {ctx.bot.send_message.await_count} sends"
     )
+
+
+# ---------------------------------------------------------------------------
+# Round 2: pin the daily_scan -> crawl_district keyword-asymmetry contract
+# ---------------------------------------------------------------------------
+
+
+async def test_daily_scan_does_not_pass_keyword_to_crawl_district(
+    settings: Settings,
+    conn: sqlite3.Connection,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pin the asymmetry: daily_scan MUST NOT forward a keyword to crawl_district.
+
+    Background (see the ``# NB:`` comment in ``jobs.py`` next to the
+    ``crawl_district`` call): the server-side ``txtSearchTerm`` filter can
+    only narrow on ONE term, so passing one user's keyword would silently
+    drop the other users' matches from the same shared crawl. The bot's
+    client-side ``matching.matches()`` is the source of truth for
+    multi-user fan-out.
+
+    This test stubs ``crawl_district`` with a probe that fails loudly if
+    ``keyword=`` is ever passed in. A future refactor that "unifies" the
+    two crawl call sites by threading a keyword through daily_scan would
+    trip this test before it ships.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    observed_kwargs: list[dict[str, object]] = []
+
+    async def assert_no_keyword(**kwargs: object) -> CrawlResult:
+        observed_kwargs.append(kwargs)
+        # Fail loudly inside the stub so the failure mode is visible
+        # whether or not the caller checks the kwargs list afterwards.
+        assert kwargs.get("keyword", "") == "", (
+            f"daily_scan must not pass keyword= to crawl_district; got {kwargs.get('keyword')!r}"
+        )
+        return CrawlResult(snapshots=(), truncated=False)
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", assert_no_keyword)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map)
+
+    ctx = _make_context(settings=settings, conn=conn)
+    await jobs.daily_scan(ctx)
+
+    # Sanity: the stub WAS reached (otherwise the assertion above would
+    # never have run and the test would pass vacuously).
+    assert observed_kwargs, "crawl_district stub must have been called"

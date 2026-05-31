@@ -79,6 +79,15 @@ STATE_PICK_KEYWORD = 2
 # deferred to Phase 5 (the daily-scan code path); see tasks/todo .md.
 BACKFILL_CAP = 15
 
+# German user-facing note appended to the backfill completion message when
+# ``scraper.crawl`` reports ``truncated=True``. Lifted to module-level so the
+# tests can import and match against the exact string rather than a fragile
+# "contains Seiten-Limit" substring assertion.
+_TRUNCATION_NOTE = (
+    " Hinweis: Der Scan hat das Seiten-Limit erreicht; "
+    "möglicherweise wurden weitere Treffer nicht erfasst."
+)
+
 # user_data keys (per-user state inside the onboarding ConversationHandler)
 _UD_DISTRICT_MAP = "district_map"  # dict[int, int]
 _UD_DISTRICT_NAMES = "district_names"  # dict[int, str]
@@ -367,10 +376,7 @@ async def _run_backfill(
         # districts, or accept the partial result.
         completion = f"Backfill fertig. {sent} Treffer gesendet."
         if crawl_result.truncated:
-            completion += (
-                " Hinweis: Der Scan hat das Seiten-Limit erreicht; "
-                "möglicherweise wurden weitere Treffer nicht erfasst."
-            )
+            completion += _TRUNCATION_NOTE
         await update.message.reply_text(completion)
     return sent
 
