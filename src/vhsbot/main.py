@@ -58,15 +58,15 @@ logger = logging.getLogger(__name__)
 # /cancel is intentionally omitted — it's only a ConversationHandler fallback,
 # meaningful inside the onboarding flow only.
 _BOT_COMMANDS: tuple[BotCommand, ...] = (
-    BotCommand("start", "Bot starten / Begrüßung anzeigen"),
-    BotCommand("help", "Hilfe anzeigen"),
-    BotCommand("list", "Meine Suchwörter anzeigen"),
-    BotCommand("watch", "Suchwort hinzufügen (mit Backfill)"),
-    BotCommand("unwatch", "Suchwort entfernen"),
-    BotCommand("districts", "Bezirke ändern"),
-    BotCommand("pause", "Benachrichtigungen pausieren"),
-    BotCommand("resume", "Benachrichtigungen fortsetzen"),
-    BotCommand("scan", "Sofort scannen"),
+    BotCommand("start", "Start the bot / show greeting"),
+    BotCommand("help", "Show help"),
+    BotCommand("list", "List my watched keywords"),
+    BotCommand("watch", "Watch a keyword (runs backfill)"),
+    BotCommand("unwatch", "Stop watching a keyword"),
+    BotCommand("districts", "Change my districts"),
+    BotCommand("pause", "Pause notifications"),
+    BotCommand("resume", "Resume notifications"),
+    BotCommand("scan", "Scan now"),
 )
 
 

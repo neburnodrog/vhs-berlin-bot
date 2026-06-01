@@ -46,7 +46,7 @@ def course_card(
     - ``"back_in_stock"`` -> "Back in stock: ..."
     - ``"backfill"``    -> "Match from your watch backfill: ..."
 
-    The inline keyboard always carries a single "Details oeffnen" button
+    The inline keyboard always carries a single "Open details" button
     pointing at ``detail_url``.
 
     A runtime ``assert`` catches the case where a caller bypasses the
@@ -67,13 +67,13 @@ def course_card(
     date_range = _esc(course.date_range or "")
     avail = _esc(course.availability)
 
-    parts: list[str] = [prefix, f"*{title}*", f"Kurs: `{cnum}`"]
+    parts: list[str] = [prefix, f"*{title}*", f"Course: `{cnum}`"]
     if district:
-        parts.append(f"Bezirk: {district}")
+        parts.append(f"District: {district}")
     if date_range:
-        parts.append(f"Termin: {date_range}")
-    parts.append(f"Plaetze: {avail}")
+        parts.append(f"Date: {date_range}")
+    parts.append(f"Seats: {avail}")
 
     text = "\n".join(parts)
-    markup = InlineKeyboardMarkup([[InlineKeyboardButton("Details oeffnen", url=detail_url)]])
+    markup = InlineKeyboardMarkup([[InlineKeyboardButton("Open details", url=detail_url)]])
     return text, markup

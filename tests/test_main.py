@@ -181,6 +181,19 @@ def test_bot_commands_are_botcommand_instances() -> None:
         )
 
 
+def test_no_german_diacritics_in_bot_authored_constants() -> None:
+    """Cheap regression guard against accidentally re-introducing German strings
+    in bot-authored copy. District names + course titles are NOT covered here;
+    they come from VHS Berlin's catalog and may legitimately contain umlauts.
+    """
+    from vhsbot.handlers import _TRUNCATION_NOTE
+
+    forbidden = set("äöüßÄÖÜ")
+    for cmd in main._BOT_COMMANDS:
+        assert not (forbidden & set(cmd.description)), f"German diacritic in {cmd!r}"
+    assert not (forbidden & set(_TRUNCATION_NOTE)), "German diacritic in _TRUNCATION_NOTE"
+
+
 def test_build_application_uses_aiorate_limiter(settings: Settings) -> None:
     """``AIORateLimiter`` must be the Application's outbound throttle.
 

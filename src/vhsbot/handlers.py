@@ -79,14 +79,11 @@ STATE_PICK_KEYWORD = 2
 # deferred to Phase 5 (the daily-scan code path); see tasks/todo .md.
 BACKFILL_CAP = 15
 
-# German user-facing note appended to the backfill completion message when
+# User-facing note appended to the backfill completion message when
 # ``scraper.crawl`` reports ``truncated=True``. Lifted to module-level so the
 # tests can import and match against the exact string rather than a fragile
-# "contains Seiten-Limit" substring assertion.
-_TRUNCATION_NOTE = (
-    " Hinweis: Der Scan hat das Seiten-Limit erreicht; "
-    "möglicherweise wurden weitere Treffer nicht erfasst."
-)
+# "contains page-limit" substring assertion.
+_TRUNCATION_NOTE = " Note: the scan hit the page limit; some matches may not have been captured."
 
 # user_data keys (per-user state inside the onboarding ConversationHandler)
 _UD_DISTRICT_MAP = "district_map"  # dict[int, int]
@@ -146,7 +143,7 @@ def build_district_keyboard(
     """Render the multi-select district keyboard.
 
     Layout: 3 columns of district toggles in ascending district-id order,
-    plus a final row with "Alle" (select all) and "Fertig" (confirm).
+    plus a final row with "All" (select all) and "Done" (confirm).
     Selected districts show a leading ``[x]`` marker — no emojis per the
     Phase 4 spec.
 
@@ -172,8 +169,8 @@ def build_district_keyboard(
         rows.append(current_row)
     rows.append(
         [
-            InlineKeyboardButton("Alle", callback_data="all"),
-            InlineKeyboardButton("Fertig", callback_data="done"),
+            InlineKeyboardButton("All", callback_data="all"),
+            InlineKeyboardButton("Done", callback_data="done"),
         ]
     )
     return InlineKeyboardMarkup(rows)
@@ -330,7 +327,7 @@ async def _run_backfill(
         return 0
 
     if update.message is not None:
-        await update.message.reply_text(f"Backfill für {keyword!r} läuft (kann ~30-60s dauern)...")
+        await update.message.reply_text(f"Backfill for {keyword!r} running (may take ~30-60s)...")
 
     sent = 0
     try:
@@ -370,11 +367,11 @@ async def _run_backfill(
 
     if update.message is not None:
         # The truncation note exists because the live "/watch goldschmiede"
-        # bug surfaced "0 Treffer gesendet" without any hint that the crawl
+        # bug surfaced "0 matches sent" without any hint that the crawl
         # had only seen the first N pages of a deep district. Surfacing the
         # gap to the user lets them decide whether to retry, narrow their
         # districts, or accept the partial result.
-        completion = f"Backfill fertig. {sent} Treffer gesendet."
+        completion = f"Backfill done. {sent} matches sent."
         if crawl_result.truncated:
             completion += _TRUNCATION_NOTE
         await update.message.reply_text(completion)
@@ -419,7 +416,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     assert update.message is not None
     await update.message.reply_text(
-        "Welcome! Pick the districts you want me to watch. Tap to toggle, then press Fertig.",
+        "Welcome! Pick the districts you want me to watch. Tap to toggle, then press Done.",
         reply_markup=build_district_keyboard(district_map, district_names, selected=set()),
     )
     return STATE_PICK_DISTRICTS
@@ -507,7 +504,7 @@ async def districts_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     assert update.message is not None
     await update.message.reply_text(
-        "Pick your districts. Tap to toggle, then press Fertig.",
+        "Pick your districts. Tap to toggle, then press Done.",
         reply_markup=build_district_keyboard(district_map, district_names, selected=selected),
     )
     return STATE_PICK_DISTRICTS
@@ -662,7 +659,7 @@ async def conversation_interrupt(update: Update, context: ContextTypes.DEFAULT_T
 
     If the user sends ANY slash command while we're waiting for a
     keyword, exit the conversation cleanly with a clear message. Their
-    saved districts (if persisted at the Fertig step) remain — only the
+    saved districts (if persisted at the Done step) remain — only the
     pending-keyword state is dropped.
     """
     context.user_data.pop(_UD_DISTRICT_MAP, None)

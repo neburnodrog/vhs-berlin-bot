@@ -109,9 +109,9 @@ def test_course_card_with_minimal_course_data() -> None:
     """A ``CourseSnapshot`` with ``district=None`` and ``date_range=None``
     must format without crashing.
 
-    Pins the optional-field branches in :func:`course_card`: the Bezirk/
-    Termin lines must be omitted when their values are None, rather than
-    rendering "Bezirk: None" or raising. The Plaetze + title + course-number
+    Pins the optional-field branches in :func:`course_card`: the District/
+    Date lines must be omitted when their values are None, rather than
+    rendering "District: None" or raising. The Seats + title + course-number
     lines remain because they are non-optional in CourseSnapshot.
     """
     minimal = _course(district=None, date_range=None)
@@ -127,10 +127,10 @@ def test_course_card_with_minimal_course_data() -> None:
     # Required fields still in output.
     assert "Yoga sanft" in text or "Yoga" in text
     # Optional-field labels must NOT leak with a "None" string.
-    assert "Bezirk: None" not in text
-    assert "Termin: None" not in text
+    assert "District: None" not in text
+    assert "Date: None" not in text
     # Empty-string for the missing fields must also not produce blank label lines.
-    assert "Bezirk: \n" not in text
-    assert "Termin: \n" not in text
+    assert "District: \n" not in text
+    assert "Date: \n" not in text
     # The keyboard still resolves cleanly.
     assert markup.inline_keyboard[0][0].url == "https://example.test/x"

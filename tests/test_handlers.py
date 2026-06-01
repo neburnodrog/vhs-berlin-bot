@@ -507,10 +507,10 @@ class TestWatchHandler:
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Phase 7 scraper fix: when ``scraper.crawl`` reports ``truncated=True``,
-        the backfill completion message must include the German truncation note
+        the backfill completion message must include the truncation note
         so the user is not silently under-informed when the crawl hit the
         page guard. Originating bug: ``/watch goldschmiede`` against
-        Tempelhof-Schöneberg returned "0 Treffer gesendet" because the old
+        Tempelhof-Schöneberg returned "0 matches sent" because the old
         50-page guard truncated the 81+ page crawl. The user could not
         tell whether 0 was the real answer or whether matches existed
         beyond the truncation point.
@@ -524,7 +524,7 @@ class TestWatchHandler:
         await handlers.watch(update, ctx)
 
         replies = [call.args[0] for call in update.message.reply_text.await_args_list]
-        completion = next((r for r in replies if "Treffer gesendet" in r), None)
+        completion = next((r for r in replies if "matches sent" in r), None)
         assert completion is not None, (
             f"backfill must always emit a completion message; reply chain was {replies!r}"
         )
@@ -552,7 +552,7 @@ class TestWatchHandler:
         await handlers.watch(update, ctx)
 
         replies = [call.args[0] for call in update.message.reply_text.await_args_list]
-        completion = next((r for r in replies if "Treffer gesendet" in r), None)
+        completion = next((r for r in replies if "matches sent" in r), None)
         assert completion is not None
         assert _TRUNCATION_NOTE not in completion, (
             "clean (non-truncated) crawl must NOT include the page-limit warning; "
