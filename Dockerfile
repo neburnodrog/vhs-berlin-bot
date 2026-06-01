@@ -27,6 +27,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DB_PATH=/data/vhsbot.db \
     SNAPSHOT_DIR=/data/snapshots
 
+RUN mkdir -p /data && chown vhsbot:vhsbot /data
+
 USER vhsbot
 VOLUME ["/data"]
 
