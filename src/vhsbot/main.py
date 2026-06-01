@@ -42,6 +42,7 @@ import asyncio
 import logging
 
 import httpx
+from telegram import BotCommand
 from telegram.ext import AIORateLimiter, Application
 
 from vhsbot import db, handlers
@@ -50,6 +51,23 @@ from vhsbot.config import Settings, load_settings
 from vhsbot.jobs import daily_scan
 
 logger = logging.getLogger(__name__)
+
+
+# Slash-autocomplete menu populated via setMyCommands at startup.
+# Order is the order the user sees in Telegram's command list.
+# /cancel is intentionally omitted — it's only a ConversationHandler fallback,
+# meaningful inside the onboarding flow only.
+_BOT_COMMANDS: tuple[BotCommand, ...] = (
+    BotCommand("start", "Bot starten / Begrüßung anzeigen"),
+    BotCommand("help", "Hilfe anzeigen"),
+    BotCommand("list", "Meine Suchwörter anzeigen"),
+    BotCommand("watch", "Suchwort hinzufügen (mit Backfill)"),
+    BotCommand("unwatch", "Suchwort entfernen"),
+    BotCommand("districts", "Bezirke ändern"),
+    BotCommand("pause", "Benachrichtigungen pausieren"),
+    BotCommand("resume", "Benachrichtigungen fortsetzen"),
+    BotCommand("scan", "Sofort scannen"),
+)
 
 
 async def _post_init(application: Application) -> None:
@@ -67,6 +85,9 @@ async def _post_init(application: Application) -> None:
     application.bot_data[BD_DB_LOCK] = asyncio.Lock()
     # Manual /scan concurrency guard — see handlers.scan + jobs.daily_scan.
     application.bot_data["scan_running"] = False
+    # Populate the Telegram client's "/" slash-autocomplete menu. Sent once
+    # per startup; Telegram caches it server-side per (bot, scope, language).
+    await application.bot.set_my_commands(_BOT_COMMANDS)
     logger.info("vhs-berlin-bot ready (db=%s)", settings.db_path)
 
 

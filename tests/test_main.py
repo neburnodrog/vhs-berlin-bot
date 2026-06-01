@@ -11,12 +11,15 @@ from __future__ import annotations
 
 from datetime import time
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 
 import pytest
+from telegram import BotCommand
 from telegram.ext import CommandHandler, ConversationHandler
 
 from vhsbot import handlers, main
+from vhsbot._app_state import BD_SETTINGS
 from vhsbot.config import Settings
 from vhsbot.jobs import daily_scan
 
@@ -93,6 +96,89 @@ def test_build_application_registers_all_command_handlers(settings: Settings) ->
     }
     missing = expected - found_commands
     assert not missing, f"missing command handlers: {sorted(missing)}"
+
+
+def test_bot_commands_constant_includes_all_top_level_handlers(settings: Settings) -> None:
+    """``_BOT_COMMANDS`` must mirror every top-level CommandHandler.
+
+    Cross-check invariant. If someone adds a new ``/foo`` to
+    ``handlers.register_handlers`` but forgets to extend
+    ``main._BOT_COMMANDS``, the Telegram slash autocomplete silently
+    diverges from reality. This test fails loudly in that case.
+
+    ``/cancel`` is intentionally omitted from ``_BOT_COMMANDS`` -- it
+    lives only inside the onboarding ConversationHandler's fallbacks and
+    is meaningless outside that flow.
+    """
+    app = main.build_application(settings)
+
+    # "Top-level" from the user's POV means any command they can type
+    # outside a conversation -- that's direct CommandHandlers PLUS
+    # ConversationHandler entry_points (e.g. /start). We deliberately
+    # skip ConversationHandler.fallbacks: those are conversation-only
+    # interrupts and (for /cancel) genuinely meaningless outside a flow.
+    top_level_commands: set[str] = set()
+    for h in app.handlers[0]:
+        if isinstance(h, CommandHandler):
+            top_level_commands |= set(h.commands)
+        elif isinstance(h, ConversationHandler):
+            for sub in h.entry_points:
+                if isinstance(sub, CommandHandler):
+                    top_level_commands |= set(sub.commands)
+
+    menu_commands = {cmd.command for cmd in main._BOT_COMMANDS}
+
+    # Direction 1: every top-level registered command (except /cancel)
+    # must be in the slash menu.
+    missing_from_menu = (top_level_commands - {"cancel"}) - menu_commands
+    assert not missing_from_menu, (
+        f"top-level commands missing from _BOT_COMMANDS slash menu: {sorted(missing_from_menu)}"
+    )
+
+    # Direction 2: every entry in the slash menu must correspond to a
+    # registered top-level command (no phantom menu entries).
+    phantom = menu_commands - top_level_commands
+    assert not phantom, (
+        f"_BOT_COMMANDS entries with no registered top-level handler: {sorted(phantom)}"
+    )
+
+    # And /cancel must NOT be in the menu (intentional omission).
+    assert "cancel" not in menu_commands, (
+        "/cancel must not appear in _BOT_COMMANDS; it is a conversation "
+        "fallback only and is meaningless outside the onboarding flow"
+    )
+
+
+async def test_post_init_calls_set_my_commands(settings: Settings) -> None:
+    """``_post_init`` must register the slash autocomplete menu via
+    ``bot.set_my_commands(_BOT_COMMANDS)``.
+
+    We stub the bot with an ``AsyncMock`` and avoid the real Application
+    so we don't open any network connections. ``db.connect`` +
+    ``db.init_schema`` use the temp ``settings.db_path`` -- real but
+    cheap (sqlite file in tmp_path).
+    """
+    application = MagicMock()
+    application.bot_data = {BD_SETTINGS: settings}
+    application.bot = MagicMock()
+    application.bot.set_my_commands = AsyncMock()
+
+    await main._post_init(application)
+
+    application.bot.set_my_commands.assert_awaited_once_with(main._BOT_COMMANDS)
+
+
+def test_bot_commands_are_botcommand_instances() -> None:
+    """``_BOT_COMMANDS`` must be ``BotCommand`` instances (not raw tuples).
+
+    Pins the typed signature so descriptions can't accidentally swap
+    positions during a future refactor.
+    """
+    assert len(main._BOT_COMMANDS) > 0
+    for entry in main._BOT_COMMANDS:
+        assert isinstance(entry, BotCommand), (
+            f"_BOT_COMMANDS entries must be telegram.BotCommand, got {type(entry).__name__}"
+        )
 
 
 def test_build_application_uses_aiorate_limiter(settings: Settings) -> None:
