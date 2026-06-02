@@ -217,21 +217,26 @@ These were called out during round-2 review but consciously deferred to their ow
   - **Missing truth-table case**: new `test_crawl_district_with_keyword_does_not_early_exit_when_page_one_has_results` closes the (rows + no-next-arrow) cell of the early-exit truth table.
   - 206 → 213 tests, ruff lint+format clean.
 - [x] **Phase 7 UX: register bot commands with Telegram setMyCommands at startup (2026-06-01)** — the 9 top-level slash commands (start, help, list, watch, unwatch, districts, pause, resume, scan) now populate the Telegram client's `/` autocomplete menu automatically. New module-level `main._BOT_COMMANDS: tuple[BotCommand, ...]` defines the menu with German descriptions; `_post_init` awaits `application.bot.set_my_commands(_BOT_COMMANDS)` once per startup. `/cancel` is deliberately omitted — it's a ConversationHandler fallback only, meaningless outside onboarding. Cross-check test pins the menu-vs-handlers invariant in both directions so a future "added a new /command in handlers.py but forgot the menu" regression fails loudly. BotFather's manual `/setcommands` is no longer needed; the bot self-registers. 213 → 216 tests, ruff lint+format clean.
-- [ ] Dockerfile build locally: `docker build -t vhs-berlin-bot:dev . && docker run --rm -e TELEGRAM_BOT_TOKEN=... -e ALLOWED_USER_IDS=... -v /tmp/vhsdata:/data vhs-berlin-bot:dev`
-- [ ] Create Telegram bot via @BotFather, get token, set bot description + commands list
-- [ ] Get own Telegram user_id (via @userinfobot)
-- [ ] Push private repo to GitHub
-- [ ] In Coolify: new service from the repo, env vars (TELEGRAM_BOT_TOKEN, ALLOWED_USER_IDS, TZ=Europe/Berlin, DB_PATH=/data/vhsbot.db, SCAN_TIME=08:00), volume mount `/data`
-- [ ] Deploy; verify logs show "ready"; send `/start` to the bot from Telegram
+- [-] ~~Dockerfile build locally~~ — skipped; deployed straight to Coolify which builds the same Dockerfile, so the production build IS the verification. Local docker daemon wasn't worth standing up just for this.
+- [x] Telegram bot created via @BotFather; token captured into local `.env` and Coolify env vars (never committed). Bot's slash commands now self-register via `setMyCommands` at startup — BotFather's `/setcommands` step is not needed.
+- [x] Own Telegram user_id captured via @userinfobot, set as `ALLOWED_USER_IDS` env var.
+- [x] Repo pushed to GitHub. Flipped from private to public mid-deploy (`gh repo edit ... --visibility public`) so Coolify could clone without needing the GitHub App credential dance. No secrets in code (`.env` gitignored, token only lives in Coolify env vars).
+- [x] Coolify service `inzg827ktb7415kbmpo2giot` created on the Hetzner `localhost` server (`host.docker.internal`), Dockerfile build pack, no inbound port, all 8 env vars set, `/data` volume mounted as `vhsbot-data`.
+- [x] Deployed; container status `running:unknown` with `restart_count: 0`. `/start` verified end-to-end against the live Coolify instance — district picker rendered with human-readable names, keyword backfill triggered, "0 matches sent" returned with truncation note as expected for `goldschmiede` in a large district.
+- [x] **Phase 7 deploy debug (2026-06-01)** — three production-only Dockerfile bugs surfaced during the first deploys, each fixed in its own atomic commit:
+  - `9236c34` — `Phase 7 deploy: include README in Docker build context`. `pyproject.toml`'s `readme = "README.md"` triggered hatchling validation during the second `uv sync` (the one that builds the project, without `--no-install-project`). README was in `.dockerignore`'s whitelist (`!README.md`) but never `COPY`'d. Fix: bundle into the existing metadata COPY: `COPY pyproject.toml uv.lock* README.md ./`.
+  - `49c314e` — `Phase 7 deploy: pre-create /data with vhsbot ownership`. Docker's first-mount initialization for named volumes copies the IMAGE's directory ownership into the new volume. The Dockerfile declared `VOLUME ["/data"]` but never `mkdir -p /data && chown vhsbot:vhsbot /data` before `USER vhsbot`, so the mount point came up root-owned and `sqlite3.connect("/data/vhsbot.db")` raised `OperationalError: unable to open database file`. Fix: pre-create the directory with the right ownership in the runtime stage. **Existing stale volumes are not retroactively re-chowned** — had to delete the previous volume via Coolify UI so the next mount triggered fresh init from the new image.
+  - Verified end-to-end via the Coolify MCP `get_application` showing `status: running:unknown`, `restart_count: 0`, `last_restart_type: null`.
+- [x] **Phase 7 i18n (2026-06-01, `4b42378`)** — converted all bot-authored user-facing strings from German to English. 18 strings translated across `main._BOT_COMMANDS` descriptions, `handlers._TRUNCATION_NOTE`, `handlers` welcome/picker/backfill prompts, `handlers` inline keyboard buttons ("Done"/"All"), and `formatting.course_card` field labels ("Course:", "District:", "Date:", "Seats:", "Open details"). District names from VHS Berlin's catalog ("Mitte", "Friedrichshain-Kreuzberg", "Tempelhof-Schöneberg", ...) and course titles ("Zumba®-Fitness-Tag") are NOT translated — they're data, not bot copy. Availability literal `belegt` stays as-is (it's a VHS data value, not user prose). New `test_no_german_diacritics_in_bot_authored_constants` regression guard checks `_BOT_COMMANDS` + `_TRUNCATION_NOTE` for `ä/ö/ü/ß` — cheap canary against future re-introduction. 216 → 217 tests, ruff lint+format clean.
 
 ### Phase 8 — verification (per CLAUDE.md "Verification Before Done")
 
-- [ ] `/start` flow works end-to-end on real Telegram client
-- [ ] Watch a keyword that should match -> confirm backfill sends matches
+- [x] `/start` flow works end-to-end on real Telegram client — verified against the Coolify-deployed instance on 2026-06-01. Onboarding fired, district picker showed human-readable names, keyword prompt accepted input, backfill triggered + completion message returned.
+- [-] Watch a keyword that should match -> confirm backfill sends matches — partial. Tested with `goldschmiede` which returned 0 matches with the truncation note (correct behavior — that keyword has 0 title-substring matches in the chosen districts). A high-yield keyword (e.g. `yoga`, `Spanisch`) hasn't been tested end-to-end yet, but the unit tests cover the dispatch path.
 - [ ] Manually trigger `/scan` -> confirm a fresh full crawl runs and stores snapshot
 - [ ] Simulate "back in stock": manually flip a `seen_courses.last_availability` from "belegt" to ">2" via sqlite3 CLI; trigger /scan; confirm notification fires
-- [ ] Confirm 08:00 schedule by setting SCAN_TIME to "T+1min" temporarily and watching logs
-- [ ] Restart container; confirm subscriptions persist (DB volume works)
+- [ ] Confirm 08:00 schedule by setting SCAN_TIME to "T+1min" temporarily and watching logs — alternatively: just wait for tomorrow's 08:00 Europe/Berlin natural fire and watch the Coolify logs.
+- [ ] Restart container; confirm subscriptions persist (DB volume works) — Coolify "Restart" button is the easy path.
 
 ## Out of scope for v1
 
@@ -240,7 +245,7 @@ These were called out during round-2 review but consciously deferred to their ow
 - Web dashboard
 - iCal / calendar export
 - Course-cancellation alerts (only "back in stock" the reverse direction)
-- Multi-language UX (DE-only messages)
+- Multi-language UX (the Phase 7 i18n pass made everything English; switching back to German OR supporting both via Telegram's `language_code` parameter on `set_my_commands` would be a v1.1 thing)
 - Webhook deployment (use `run_polling()` — fine for one container)
 
 ## Review section
