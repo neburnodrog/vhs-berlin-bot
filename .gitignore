@@ -13,6 +13,10 @@ __pycache__/
 .env.*
 !.env.example
 
+# Claude Code personal overrides (per-machine, not team-shared)
+CLAUDE.local.md
+.claude/settings.local.json
+
 # Local data (SQLite + scraped HTML snapshots)
 /data/
 *.db
