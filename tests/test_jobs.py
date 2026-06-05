@@ -1249,3 +1249,255 @@ async def test_daily_scan_does_not_pass_keyword_to_crawl_district(
     # Sanity: the stub WAS reached (otherwise the assertion above would
     # never have run and the test would pass vacuously).
     assert observed_kwargs, "crawl_district stub must have been called"
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: scan_log + scan_running discipline
+# ---------------------------------------------------------------------------
+
+
+async def test_daily_scan_writes_scan_log_row_on_success(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A successful scan persists exactly one ``scan_log`` row with succeeded=True."""
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    snapshots = [_snap(kurs_id=9001, title="Yoga sanft", availability=">2")]
+    _patch_crawl(monkeypatch, snapshots)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    entry = db.latest_scan(conn)
+    assert entry is not None
+    assert entry.succeeded is True
+    assert entry.error_summary is None
+    assert entry.districts_crawled == 1
+    assert entry.courses_seen >= 1
+    assert entry.matches_sent == 1
+
+
+async def test_daily_scan_empty_union_still_writes_scan_log(
+    settings: Settings, conn: sqlite3.Connection
+) -> None:
+    """No active users -> scan skips crawl but STILL writes a scan_log row.
+
+    Pin for the "I want to know if it ran" use case: an empty-union scan
+    is still observable through ``/status``. All counters are zero,
+    succeeded=True, error_summary is NULL.
+    """
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    entry = db.latest_scan(conn)
+    assert entry is not None
+    assert entry.succeeded is True
+    assert entry.error_summary is None
+    assert entry.districts_crawled == 0
+    assert entry.courses_seen == 0
+    assert entry.matches_sent == 0
+
+
+async def test_daily_scan_partial_district_failure_writes_failed_scan_log(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A per-district failure surfaces in scan_log with succeeded=False + district id in summary."""
+    db.upsert_user_settings(conn, user_id=111, districts=[31, 32])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    snap_d31 = _snap(kurs_id=8000, title="Yoga sanft", availability=">2", district="Mitte")
+
+    async def per_district(
+        *,
+        client: object,
+        district_checkbox_index: int,
+        sleep_seconds: float,
+        district_id: int | None = None,
+        raw_html_callback: Callable[[int, int, bytes], None] | None = None,
+    ) -> CrawlResult:
+        if district_id == 31:
+            return CrawlResult(snapshots=(snap_d31,), truncated=False)
+        raise RuntimeError("district 32 exploded")
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", per_district)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5, 32: 2}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    with pytest.raises(RuntimeError, match="district 32"):
+        await jobs.daily_scan(ctx)
+
+    entry = db.latest_scan(conn)
+    assert entry is not None
+    assert entry.succeeded is False
+    assert entry.error_summary is not None
+    assert "32" in entry.error_summary  # district id surfaces in summary
+    assert "district 32 exploded" in entry.error_summary or "RuntimeError" in entry.error_summary
+
+
+async def test_daily_scan_resets_scan_running_flag_on_failure(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Critical fix #1: scan_running must be reset even when the scan raises.
+
+    Without this, a failed scan locks out every subsequent ``/scan`` and
+    scheduled fire until the process restarts.
+    """
+    from vhsbot._app_state import BD_SCAN_RUNNING
+
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    async def boom(**kw: Any) -> CrawlResult:
+        raise RuntimeError("VHS Berlin returned 503")
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", boom)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    # Pre-set the flag to True so we can observe the reset (and confirm
+    # daily_scan does not depend on the flag being False on entry).
+    ctx.bot_data[BD_SCAN_RUNNING] = True
+
+    with pytest.raises(RuntimeError, match="503"):
+        await jobs.daily_scan(ctx)
+
+    assert ctx.bot_data[BD_SCAN_RUNNING] is False, (
+        "scan_running must be reset in finally even when the scan raises"
+    )
+
+
+async def test_daily_scan_sets_scan_running_true_during_run_and_resets_on_success(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """daily_scan owns the lifecycle of ``scan_running``: True on entry, False on exit.
+
+    Pin for the latent-bug fix: previously only ``/scan`` set the flag, so a
+    manual ``/scan`` issued during the scheduled fire could run a second
+    crawl in parallel. Now the scheduled path sets the flag too.
+    """
+    from vhsbot._app_state import BD_SCAN_RUNNING
+
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    observed_flag: list[bool] = []
+
+    async def observe_then_succeed(**kw: Any) -> CrawlResult:
+        observed_flag.append(ctx.bot_data[BD_SCAN_RUNNING])
+        return CrawlResult(snapshots=(), truncated=False)
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", observe_then_succeed)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    assert observed_flag == [True], "scan_running must be True during the crawl"
+    assert ctx.bot_data[BD_SCAN_RUNNING] is False, "scan_running must be reset after the scan"
+
+
+async def test_record_scan_raising_in_finally_does_not_swallow_original_exception(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Critical fix #2: if ``record_scan`` raises during finally, the original exception wins.
+
+    Without the nested try/except, the record_scan exception would replace
+    the original scan exception in the propagation chain (Python's finally
+    semantics), and PTB's error handler would see the wrong root cause.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    async def boom(**kw: Any) -> CrawlResult:
+        raise RuntimeError("original scan failure 503")
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", boom)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+
+    def boom_record_scan(*args: object, **kw: object) -> None:
+        raise sqlite3.OperationalError("scan_log table missing somehow")
+
+    monkeypatch.setattr(jobs, "record_scan", boom_record_scan)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    # The ORIGINAL exception must be the one that propagates, not the
+    # record_scan one.
+    with pytest.raises(RuntimeError, match="original scan failure 503"):
+        await jobs.daily_scan(ctx)
+
+
+async def test_record_scan_raising_on_successful_scan_is_swallowed(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Critical fix #2 (corollary): a successful scan + record_scan raises -> no exception.
+
+    The scan itself worked. ``record_scan`` is a best-effort observability
+    write; if it fails, we log and continue. The caller (PTB JobQueue) sees
+    a clean return.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    _patch_crawl_district(monkeypatch, {31: []})
+
+    def boom_record_scan(*args: object, **kw: object) -> None:
+        raise sqlite3.OperationalError("scan_log write failed")
+
+    monkeypatch.setattr(jobs, "record_scan", boom_record_scan)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    # Must NOT raise — scan succeeded, observability write failure is silent.
+    await jobs.daily_scan(ctx)
+
+
+async def test_failure_scan_log_redacts_bot_token_from_error_summary(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Critical fix #3: ``error_summary`` must never contain the bot token.
+
+    Even if an exception's ``str()`` happens to embed the token (e.g.
+    httpx URL formatting on a 401), the value persisted to ``scan_log``
+    goes through ``Settings.redact`` before write.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    token = settings.telegram_bot_token  # 'testtoken' per the settings fixture
+
+    async def boom(**kw: Any) -> CrawlResult:
+        raise RuntimeError(f"Auth failed with token={token} please rotate")
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", boom)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    with pytest.raises(RuntimeError):
+        await jobs.daily_scan(ctx)
+
+    entry = db.latest_scan(conn)
+    assert entry is not None
+    assert entry.error_summary is not None
+    assert token not in entry.error_summary
+    assert "[redacted]" in entry.error_summary

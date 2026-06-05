@@ -25,6 +25,11 @@ BD_SETTINGS = "settings"
 BD_DB = "db"
 BD_DB_LOCK = "db_lock"
 BD_CLIENT = "http_client"
+# Phase 9: hoisted from the ``"scan_running"`` literal in handlers.scan.
+# Both the manual ``/scan`` handler AND the scheduled ``daily_scan`` job
+# set this flag on entry and reset it in their finally clauses, so a
+# manual /scan issued during the scheduled fire correctly defers.
+BD_SCAN_RUNNING = "scan_running"
 
 
 @asynccontextmanager

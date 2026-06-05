@@ -46,7 +46,7 @@ from __future__ import annotations
 import logging
 import shutil
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -58,6 +58,7 @@ from vhsbot import scraper
 from vhsbot._app_state import (
     BD_CLIENT,
     BD_DB,
+    BD_SCAN_RUNNING,
     BD_SETTINGS,
     locked_db,
 )
@@ -71,6 +72,7 @@ from vhsbot.db import (
     get_user_settings,
     list_subscriptions,
     record_notification,
+    record_scan,
     union_active_districts,
     upsert_seen_course,
 )
@@ -103,6 +105,25 @@ class _UserSubs:
     user_id: int
     districts: frozenset[int]
     keywords: tuple[str, ...]
+
+
+@dataclass(slots=True)
+class _ScanProgress:
+    """Mutable counters + first-error summary, read by ``daily_scan``'s finally.
+
+    Passed by reference through ``_run_daily_scan`` and
+    ``_process_district_snapshots`` so partial progress is observable
+    when the scan raises mid-flight. The ``error_summary`` field
+    captures a redacted, district-tagged summary of the FIRST per-district
+    failure (later ones overwrite nothing). The finally clause uses the
+    captured summary in preference to ``str(exc)`` because it carries
+    the district context that the bare exception lacks.
+    """
+
+    districts_crawled: int = 0
+    courses_seen: int = 0
+    matches_sent: int = 0
+    error_summary: str | None = field(default=None)
 
 
 def _date_dir_name(d: date) -> str:
@@ -176,16 +197,73 @@ async def _fetch_district_map(client: httpx.AsyncClient, settings: Settings) -> 
     return parse_district_map(resp.content)
 
 
+def _summarize_exc(exc: BaseException, settings: Settings) -> str:
+    """Build a single-line, token-redacted summary of an exception for ``scan_log``."""
+    return f"{type(exc).__name__}: {settings.redact(str(exc))[:200]}"
+
+
 async def daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """The JobQueue daily callback. See module docstring for the full spec."""
+    """The JobQueue daily callback. See module docstring for the full spec.
+
+    Phase 9 wraps the body in a try/finally that does THREE things on exit
+    (in this exact order — see ``tasks/todo .md`` "Critical fixes"):
+
+    1. **Nested try/except** writes a ``scan_log`` row. A ``record_scan``
+       failure is logged and swallowed so it can never displace the
+       original scan exception in the propagation chain (Python's
+       finally semantics replace exceptions otherwise).
+    2. Reset ``bot_data[BD_SCAN_RUNNING] = False`` so a transient crash
+       does not strand the bot in a locked-out state (the next ``/scan``
+       or scheduled fire would silently defer forever otherwise).
+    3. The outer ``try``'s ``raise`` propagates as the finally exits,
+       so PTB's ``add_error_handler`` still sees the failure.
+
+    The ``BD_SCAN_RUNNING`` flag is owned by BOTH the manual ``/scan``
+    handler (handlers.scan) and this scheduled job; either side setting
+    the flag blocks the other, so the two paths never run in parallel.
+    """
+    settings: Settings = context.bot_data[BD_SETTINGS]
+    progress = _ScanProgress()
+    exc: BaseException | None = None
+    context.bot_data[BD_SCAN_RUNNING] = True
     try:
-        await _run_daily_scan(context)
-    except Exception:
+        await _run_daily_scan(context, progress)
+    except Exception as e:
+        exc = e
         logger.exception("daily_scan failed")
         raise
+    finally:
+        # (1) Persist the scan_log row. Nested try/except so any failure
+        # in this best-effort observability write is logged + swallowed,
+        # never propagated (would otherwise mask the real exception).
+        try:
+            if exc is None:
+                succeeded = True
+                err: str | None = None
+            else:
+                succeeded = False
+                # Prefer the district-tagged summary captured at the
+                # per-district catch site; fall back to a redacted top-
+                # level summary if the exception happened outside the
+                # per-district loop (e.g. ``_fetch_district_map`` raised).
+                err = progress.error_summary or _summarize_exc(exc, settings)
+            async with locked_db(context) as conn:
+                record_scan(
+                    conn,
+                    districts_crawled=progress.districts_crawled,
+                    courses_seen=progress.courses_seen,
+                    matches_sent=progress.matches_sent,
+                    succeeded=succeeded,
+                    error_summary=err,
+                )
+        except Exception:
+            logger.exception("scan_log write failed (swallowed)")
+        # (2) Reset the concurrency flag so future scans can run.
+        context.bot_data[BD_SCAN_RUNNING] = False
+        # (3) The outer try's ``raise`` (if any) propagates as we exit.
 
 
-async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
+async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE, progress: _ScanProgress) -> None:
     settings: Settings = context.bot_data[BD_SETTINGS]
     client: httpx.AsyncClient = context.bot_data[BD_CLIENT]
     conn: sqlite3.Connection = context.bot_data[BD_DB]
@@ -253,7 +331,16 @@ async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
             logger.exception("crawl_district failed for district %s", district_id)
             if first_error is None:
                 first_error = e
+                # Capture a district-tagged summary so the scan_log row
+                # carries enough context to diagnose without the
+                # traceback. Redact via Settings so a hypothetical
+                # token-leaking exception never lands in storage.
+                progress.error_summary = (
+                    f"district {district_id}: {type(e).__name__}: {settings.redact(str(e))[:200]}"
+                )
             continue
+
+        progress.districts_crawled += 1
 
         # Truncation is a silent under-count: the scan correctly persisted
         # everything it saw, but the tail of this district's result set
@@ -280,6 +367,7 @@ async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
             deduped.append(snap)
 
         total_snapshots += len(deduped)
+        progress.courses_seen += len(deduped)
         await _process_district_snapshots(
             context=context,
             conn=conn,
@@ -290,6 +378,7 @@ async def _run_daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
             prior_counts=prior_counts,
             sent_per_user=sent_per_user,
             cap_warned=cap_warned,
+            progress=progress,
         )
 
     # 7. Snapshot persistence already happened inline (via writer).
@@ -319,6 +408,7 @@ async def _process_district_snapshots(
     prior_counts: dict[int, int],
     sent_per_user: dict[int, int],
     cap_warned: set[int],
+    progress: _ScanProgress,
 ) -> None:
     """Classify, fan-out, log, and upsert the snapshots from one district.
 
@@ -389,6 +479,7 @@ async def _process_district_snapshots(
                     conn, user_id=user_id, kurs_id=snap.kurs_id, reason=narrowed_result
                 )
             sent_per_user[user_id] = sent_per_user.get(user_id, 0) + 1
+            progress.matches_sent += 1
             any_user_notified = True
 
         # Upsert seen_courses for this snapshot, marking notified iff any

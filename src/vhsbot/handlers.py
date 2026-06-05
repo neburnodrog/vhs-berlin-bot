@@ -52,7 +52,7 @@ from telegram.ext import (
 from telegram.helpers import escape_markdown
 
 from vhsbot import scraper
-from vhsbot._app_state import BD_CLIENT, BD_SETTINGS, locked_db
+from vhsbot._app_state import BD_CLIENT, BD_SCAN_RUNNING, BD_SETTINGS, locked_db
 from vhsbot.config import Settings
 from vhsbot.db import (
     BOOKABLE_AVAILABILITY,
@@ -539,13 +539,13 @@ async def resume(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Manual ``/scan`` trigger — wired to :func:`vhsbot.jobs.daily_scan`.
 
-    Concurrency guard: ``application.bot_data["scan_running"]`` is a
-    single bool flag. The daily scheduled run sets the same flag on
-    entry (via this handler's ``try/finally`` wrapping), so a manual
+    Concurrency guard: ``application.bot_data[BD_SCAN_RUNNING]`` is a
+    single bool flag. The scheduled ``daily_scan`` job sets the same flag
+    on entry and resets it in its own finally (Phase 9), so a manual
     ``/scan`` issued during the scheduled window correctly defers
     rather than running two scans in parallel. The ``finally`` clears
     the flag even when ``daily_scan`` raises, so a transient crash
-    does not strand the bot in a "scan_running=True" state.
+    does not strand the bot in a ``scan_running=True`` state.
 
     Tests patch ``vhsbot.handlers._daily_scan`` rather than
     ``vhsbot.jobs.daily_scan`` — the handler keeps a local module-level
@@ -556,11 +556,11 @@ async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     assert update.message is not None
     logger.info("manual /scan requested by user_id=%s", user.id)
 
-    if context.bot_data.get("scan_running"):
+    if context.bot_data.get(BD_SCAN_RUNNING):
         await update.message.reply_text("A scan is already running, try again in a few minutes.")
         return
 
-    context.bot_data["scan_running"] = True
+    context.bot_data[BD_SCAN_RUNNING] = True
     try:
         await update.message.reply_text("Manual scan started.")
         # Call through the module-level alias so tests can monkeypatch
@@ -568,7 +568,7 @@ async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await _daily_scan(context)
         await update.message.reply_text("Manual scan complete.")
     finally:
-        context.bot_data["scan_running"] = False
+        context.bot_data[BD_SCAN_RUNNING] = False
 
 
 # ---------------------------------------------------------------------------
