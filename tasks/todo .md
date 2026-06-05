@@ -238,6 +238,62 @@ These were called out during round-2 review but consciously deferred to their ow
 - [ ] Confirm 08:00 schedule by setting SCAN_TIME to "T+1min" temporarily and watching logs — alternatively: just wait for tomorrow's 08:00 Europe/Berlin natural fire and watch the Coolify logs.
 - [ ] Restart container; confirm subscriptions persist (DB volume works) — Coolify "Restart" button is the easy path.
 
+### Phase 9 — observability
+
+Trigger context: *"I want to be sure it's doing the scrape every morning but I cannot confirm that by looking at my conversation history with it."* Current behavior is silent on no-match (locked design from Phase 0), no observability surface, failures only land in Coolify logs.
+
+#### Decisions (locked 2026-06-04)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Observability pattern | `/status` command (pull) + auto-push on scan failure (push). Silent on healthy completion. | Standard SRE "push on alert, pull on health"; preserves the locked "silent on no-match" rule from Phase 0. |
+| Persistence shape | New `scan_log` SQLite table, append-only log (not single-row UPSERT). | Append-log gives `/status` history headroom for free and survives concurrent writes; UPSERT-of-one would race the `scan_running` recovery path. |
+| Empty-state UX | Plain *"No scans recorded yet — next scan at HH:MM"*. No backfill heuristics from `notification_log`. | Resists drift; if `scan_log` is empty after deploy, that's the literal truth. |
+| Failure-push body | One line: `⚠️ Scan failed at HH:MM: <ExcType>: <redacted str(exc)[:200]>`. Full traceback stays in stdout/Coolify only. | Telegram messages get cached in clients; truncated + redacted prevents accidental token leak from a future exception. |
+| Token redaction | `Settings.redact(text: str) -> str` method (not free function). | Method-on-`Settings` auto-extends if a new secret field lands; a free function would silently miss new fields. |
+| Commit count | 4 commits in dependency order (docs → schema → jobs → UX). | Each commit ships green tests + ruff clean; rollback target per layer if a critical fix surfaces in review. |
+
+#### Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS scan_log (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_at           TEXT    NOT NULL DEFAULT (datetime('now')),
+    districts_crawled INTEGER NOT NULL,
+    courses_seen      INTEGER NOT NULL,
+    matches_sent      INTEGER NOT NULL,
+    succeeded         INTEGER NOT NULL,           -- 0 or 1
+    error_summary     TEXT                        -- NULL when succeeded=1
+);
+```
+
+#### Critical fixes (NON-NEGOTIABLE; from plan-review on 2026-06-04)
+
+1. **`finally` clause in `daily_scan` does three things, in this order:** (a) a nested `try/except` writes the `scan_log` row so `record_scan` raising can't swallow the original exception; (b) resets `context.bot_data[BD_SCAN_RUNNING] = False`; (c) the outer `try` re-raises. Without (b) a failed scan locks out all future `/scan` and scheduled scans until process restart.
+2. **`record_scan()` failure is logged but never raises.** The original scan exception always propagates to PTB's error handler.
+3. **Token redaction at the boundary.** Failure-push body is `f"⚠️ Scan failed at {hh}:{mm}: {type(exc).__name__}: {settings.redact(str(exc))[:200]}"`. `Settings.redact` strips the bot token from any string. Full traceback only ever goes to stdout.
+
+#### Commit sequence
+
+| # | Commit message | Files |
+|---|---|---|
+| 1 | `Phase 9 docs: amend tasks/todo .md with observability policy` | `tasks/todo .md` (this commit) |
+| 2 | `Phase 9 schema: scan_log + record_scan/latest_scan + Settings.redact()` | `src/vhsbot/db.py`, `src/vhsbot/config.py`, `tests/test_db.py`, `tests/test_config.py` |
+| 3 | `Phase 9 jobs: track + persist scan counters via nested try/finally` | `src/vhsbot/jobs.py`, `tests/test_jobs.py` |
+| 4 | `Phase 9 UX: /status command + failure-push + bot-commands menu` | `src/vhsbot/handlers.py`, `src/vhsbot/formatting.py`, `src/vhsbot/main.py`, `tests/test_handlers.py`, `tests/test_formatting.py`, `tests/test_main.py` |
+
+Verification gate between commits: `uv run ruff check --fix && uv run ruff format && uv run pytest` must pass.
+
+#### Mandatory test cases
+
+- `scan_running` reset on scan failure (regression guard for critical fix #1).
+- `record_scan()` raising during finally doesn't swallow the original scan exception (critical fix #2).
+- Telegram bot token never appears in failure-push body even when `str(exc)` contains it (critical fix #3).
+- DST March transition: `/status` next-scan-time correct on Berlin DST shift day.
+- DST October transition: same.
+- Empty-union scan (no active subscribers): `scan_log` row still written, `succeeded=True`, counters all 0.
+- Partial-district failure: `scan_log` row written with `succeeded=False`, `error_summary` mentions which district, other districts' `seen_courses` still persisted.
+
 ## Out of scope for v1
 
 - Stichwort dropdown selection (free-text keywords only)
