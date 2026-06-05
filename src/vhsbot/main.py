@@ -46,7 +46,7 @@ from telegram import BotCommand
 from telegram.ext import AIORateLimiter, Application
 
 from vhsbot import db, handlers
-from vhsbot._app_state import BD_CLIENT, BD_DB, BD_DB_LOCK, BD_SETTINGS
+from vhsbot._app_state import BD_CLIENT, BD_DB, BD_DB_LOCK, BD_SCAN_RUNNING, BD_SETTINGS
 from vhsbot.config import Settings, load_settings
 from vhsbot.jobs import daily_scan
 
@@ -67,6 +67,7 @@ _BOT_COMMANDS: tuple[BotCommand, ...] = (
     BotCommand("pause", "Pause notifications"),
     BotCommand("resume", "Resume notifications"),
     BotCommand("scan", "Scan now"),
+    BotCommand("status", "Show last scan status"),
 )
 
 
@@ -83,8 +84,10 @@ async def _post_init(application: Application) -> None:
     application.bot_data[BD_CLIENT] = client
     application.bot_data[BD_DB] = conn
     application.bot_data[BD_DB_LOCK] = asyncio.Lock()
-    # Manual /scan concurrency guard — see handlers.scan + jobs.daily_scan.
-    application.bot_data["scan_running"] = False
+    # Manual /scan + scheduled daily_scan concurrency guard. Both sides
+    # set the flag on entry and reset it in their finally clauses; see
+    # handlers.scan + jobs.daily_scan.
+    application.bot_data[BD_SCAN_RUNNING] = False
     # Populate the Telegram client's "/" slash-autocomplete menu. Sent once
     # per startup; Telegram caches it server-side per (bot, scope, language).
     await application.bot.set_my_commands(_BOT_COMMANDS)

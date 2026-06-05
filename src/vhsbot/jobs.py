@@ -77,7 +77,7 @@ from vhsbot.db import (
     upsert_seen_course,
 )
 from vhsbot.diff import NotificationReason, classify
-from vhsbot.formatting import course_card
+from vhsbot.formatting import course_card, format_failure_alert
 from vhsbot.matching import matches
 from vhsbot.parser import parse_district_map
 
@@ -202,6 +202,28 @@ def _summarize_exc(exc: BaseException, settings: Settings) -> str:
     return f"{type(exc).__name__}: {settings.redact(str(exc))[:200]}"
 
 
+async def _send_failure_alerts(
+    context: ContextTypes.DEFAULT_TYPE,
+    settings: Settings,
+    exc: BaseException,
+) -> None:
+    """Push a single-line redacted failure alert to every whitelisted user.
+
+    "Allowed users" (``settings.allowed_user_ids``) is the operator set
+    for this single-user bot — even before any user has run ``/start``,
+    the operator should hear about scan failures immediately. Iterating
+    in sorted order keeps log lines deterministic; a single failed
+    recipient must NOT block the others from being notified.
+    """
+    when = datetime.now(settings.tz)
+    text = format_failure_alert(exc, settings, when)
+    for user_id in sorted(settings.allowed_user_ids):
+        try:
+            await context.bot.send_message(chat_id=user_id, text=text)
+        except Exception:
+            logger.exception("failure_alert send to user %s failed", user_id)
+
+
 async def daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
     """The JobQueue daily callback. See module docstring for the full spec.
 
@@ -231,6 +253,13 @@ async def daily_scan(context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         exc = e
         logger.exception("daily_scan failed")
+        # Failure-push: notify every whitelisted user that the scan
+        # failed. Wrapped in nested try/except so a send failure cannot
+        # mask the original scan exception in the propagation chain.
+        try:
+            await _send_failure_alerts(context, settings, e)
+        except Exception:
+            logger.exception("failure_alert send failed (swallowed)")
         raise
     finally:
         # (1) Persist the scan_log row. Nested try/except so any failure

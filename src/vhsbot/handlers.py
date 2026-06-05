@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta
 from functools import wraps
 from typing import Any
 
@@ -56,8 +57,10 @@ from vhsbot._app_state import BD_CLIENT, BD_SCAN_RUNNING, BD_SETTINGS, locked_db
 from vhsbot.config import Settings
 from vhsbot.db import (
     BOOKABLE_AVAILABILITY,
+    ScanLogEntry,
     add_subscription,
     get_user_settings,
+    latest_scan,
     list_subscriptions,
     record_notification,
     remove_subscription,
@@ -571,6 +574,67 @@ async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         context.bot_data[BD_SCAN_RUNNING] = False
 
 
+def _next_scan_at(settings: Settings, now: datetime | None = None) -> datetime:
+    """Return the next ``settings.tz``-aware datetime when ``daily_scan`` fires.
+
+    Picks today's ``settings.scan_time`` if it is still in the future; else
+    tomorrow's. ``datetime.combine(date, time, tzinfo=tz)`` is used directly
+    so DST transitions resolve via zoneinfo's PEP-495 fold semantics
+    (08:00 is never ambiguous on a DST boundary day; only the rare
+    02:00-03:00 window would be affected).
+    """
+    current = now if now is not None else datetime.now(settings.tz)
+    today_candidate = datetime.combine(current.date(), settings.scan_time, tzinfo=settings.tz)
+    if today_candidate > current:
+        return today_candidate
+    tomorrow = current.date() + timedelta(days=1)
+    return datetime.combine(tomorrow, settings.scan_time, tzinfo=settings.tz)
+
+
+def format_status_message(latest: ScanLogEntry | None, next_scan_at: datetime) -> str:
+    """Render the ``/status`` body.
+
+    UX-formatting helper — kept in ``handlers.py`` because it is the only
+    site that consumes it and the call site sits beside its only caller.
+    The empty-state branch (``latest is None``) must be handled explicitly
+    so a fresh deploy doesn't 500 the user.
+    """
+    next_at_fmt = next_scan_at.strftime("%H:%M on %Y-%m-%d")
+    if latest is None:
+        return f"No scans recorded yet — next scan at {next_at_fmt}."
+    state = "OK" if latest.succeeded else "FAILED"
+    lines = [
+        f"Last scan: {latest.scan_at} UTC — {state}",
+        f"Districts crawled: {latest.districts_crawled}",
+        f"Courses seen: {latest.courses_seen}",
+        f"Matches sent: {latest.matches_sent}",
+    ]
+    if latest.error_summary:
+        lines.append(f"Error: {latest.error_summary}")
+    lines.append(f"Next scan at {next_at_fmt}.")
+    return "\n".join(lines)
+
+
+async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """``/status`` — pull observability surface for the daily-scan job.
+
+    Reads the most-recent ``scan_log`` row, computes the next scheduled
+    fire time, and sends a single-line summary (multi-line on a prior
+    scan). Silent on healthy completion is preserved at the push side
+    (failure-push in ``jobs.daily_scan``'s except clause); this is the
+    pull side.
+    """
+    user = update.effective_user
+    assert user is not None
+    assert update.message is not None
+    settings: Settings = context.bot_data[BD_SETTINGS]
+    async with locked_db(context) as conn:
+        latest = latest_scan(conn)
+    next_scan_at = _next_scan_at(settings)
+    text = format_status_message(latest, next_scan_at)
+    await update.message.reply_text(text)
+
+
 # ---------------------------------------------------------------------------
 # Onboarding conversation callbacks
 # ---------------------------------------------------------------------------
@@ -712,7 +776,17 @@ def register_handlers(application: Application) -> None:
         fallbacks=[
             CommandHandler("cancel", cancel, filters=whitelist),
             CommandHandler(
-                ["help", "list", "watch", "unwatch", "districts", "pause", "resume", "scan"],
+                [
+                    "help",
+                    "list",
+                    "watch",
+                    "unwatch",
+                    "districts",
+                    "pause",
+                    "resume",
+                    "scan",
+                    "status",
+                ],
                 conversation_interrupt,
                 filters=whitelist,
             ),
@@ -728,4 +802,5 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("pause", pause, filters=whitelist))
     application.add_handler(CommandHandler("resume", resume, filters=whitelist))
     application.add_handler(CommandHandler("scan", scan, filters=whitelist))
+    application.add_handler(CommandHandler("status", status, filters=whitelist))
     application.add_error_handler(global_error_handler)

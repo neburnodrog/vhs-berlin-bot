@@ -92,6 +92,7 @@ def test_build_application_registers_all_command_handlers(settings: Settings) ->
         "pause",
         "resume",
         "scan",
+        "status",
         "cancel",
     }
     missing = expected - found_commands

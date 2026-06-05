@@ -12,11 +12,13 @@ Every user-influenced field is escaped via PTB's
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.helpers import escape_markdown
 
+from vhsbot.config import Settings
 from vhsbot.db import CourseSnapshot
 
 CardReason = Literal["new", "back_in_stock", "backfill"]
@@ -77,3 +79,19 @@ def course_card(
     text = "\n".join(parts)
     markup = InlineKeyboardMarkup([[InlineKeyboardButton("Open details", url=detail_url)]])
     return text, markup
+
+
+def format_failure_alert(exc: BaseException, settings: Settings, when: datetime) -> str:
+    """Render the failure-push body for ``jobs.daily_scan``'s except clause.
+
+    Single line, redacted, truncated. Telegram caches messages client-side
+    so the body MUST NOT contain the bot token; ``Settings.redact`` strips
+    it. The full traceback only ever appears in stdout/Coolify logs
+    (already logged by ``daily_scan`` via ``logger.exception``).
+
+    Lives in ``formatting.py`` (not ``handlers.py``) so it can be
+    unit-tested without importing the handler graph.
+    """
+    hh_mm = when.strftime("%H:%M")
+    detail = settings.redact(str(exc))[:200]
+    return f"⚠️ Scan failed at {hh_mm}: {type(exc).__name__}: {detail}"

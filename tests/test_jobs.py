@@ -1501,3 +1501,135 @@ async def test_failure_scan_log_redacts_bot_token_from_error_summary(
     assert entry.error_summary is not None
     assert token not in entry.error_summary
     assert "[redacted]" in entry.error_summary
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: failure-push wiring
+# ---------------------------------------------------------------------------
+
+
+async def test_daily_scan_failure_sends_alert_to_all_allowed_users(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed scan pushes one alert per ``settings.allowed_user_ids``.
+
+    Note: the allowed_user_ids fixture is ``{111, 222}``; both must receive
+    the alert regardless of whether they've completed onboarding.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    async def boom(**kw: Any) -> CrawlResult:
+        raise RuntimeError("scan went south")
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", boom)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    with pytest.raises(RuntimeError, match="scan went south"):
+        await jobs.daily_scan(ctx)
+
+    # Both whitelisted users must have been messaged with the failure body.
+    sent_chats = {call.kwargs["chat_id"] for call in ctx.bot.send_message.await_args_list}
+    assert sent_chats == settings.allowed_user_ids
+    # And the body carries the exception type + a redacted detail.
+    for call in ctx.bot.send_message.await_args_list:
+        body = call.kwargs["text"]
+        assert "RuntimeError" in body
+        assert "Scan failed" in body
+        assert "scan went south" in body  # the token wasn't in this str(exc)
+
+
+async def test_successful_scan_does_not_send_failure_alert(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The "silent on healthy completion" rule: no failure-push on success.
+
+    Cap by counting messages that contain the failure-alert prefix. The
+    daily scan still send_messages for the matched courses themselves;
+    we want to ensure NO failure-alert messages.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    _patch_crawl(monkeypatch, [_snap(kurs_id=10000, title="Yoga sanft", availability=">2")])
+    ctx = _make_context(settings=settings, conn=conn)
+
+    await jobs.daily_scan(ctx)
+
+    # No call's text body contains the failure-alert prefix.
+    for call in ctx.bot.send_message.await_args_list:
+        body = call.kwargs.get("text", "")
+        assert "Scan failed" not in body, (
+            "Healthy scan must not push a failure alert; locked design row "
+            "is 'silent on healthy completion'."
+        )
+
+
+async def test_failure_alert_send_failure_does_not_swallow_scan_exception(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If the failure-alert ``send_message`` itself raises, the original
+    scan exception still propagates to PTB's error handler.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    async def boom(**kw: Any) -> CrawlResult:
+        raise RuntimeError("original scan failure 503")
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", boom)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    # Replace bot.send_message so EVERY call raises.
+    async def boom_send(**kw: object) -> None:
+        raise RuntimeError("telegram send broke")
+
+    ctx.bot.send_message = boom_send
+
+    # The ORIGINAL scan exception must still propagate.
+    with pytest.raises(RuntimeError, match="original scan failure 503"):
+        await jobs.daily_scan(ctx)
+
+
+async def test_failure_alert_body_passes_through_settings_redact(
+    settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The failure-push body is built via ``format_failure_alert`` which redacts.
+
+    Token in the exception's str() must never reach the Telegram message body.
+    """
+    db.upsert_user_settings(conn, user_id=111, districts=[31])
+    db.add_subscription(conn, user_id=111, keyword="Yoga")
+
+    token = settings.telegram_bot_token
+
+    async def boom(**kw: Any) -> CrawlResult:
+        raise RuntimeError(f"Auth failed: token={token} please rotate")
+
+    monkeypatch.setattr(jobs.scraper, "crawl_district", boom)
+
+    async def fake_district_map(client: object, settings: Settings) -> dict[int, int]:
+        return {31: 5}
+
+    monkeypatch.setattr(jobs, "_fetch_district_map", fake_district_map, raising=False)
+    ctx = _make_context(settings=settings, conn=conn)
+
+    with pytest.raises(RuntimeError):
+        await jobs.daily_scan(ctx)
+
+    # Both whitelisted users got a message; none contain the token.
+    sent_bodies = [call.kwargs["text"] for call in ctx.bot.send_message.await_args_list]
+    assert sent_bodies, "failure-push must have fired"
+    for body in sent_bodies:
+        assert token not in body, "failure-push body must redact the bot token"
+        assert "[redacted]" in body

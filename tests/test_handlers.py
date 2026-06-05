@@ -957,3 +957,196 @@ class TestGlobalErrorHandlerApology:
         assert "wrong" in sent.kwargs["text"].lower() or "try again" in sent.kwargs["text"].lower()
         # Make sure the internal RuntimeError isn't leaked verbatim.
         assert "simulated DB outage" not in sent.kwargs["text"]
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: /status command + _next_scan_at + format_status_message
+# ---------------------------------------------------------------------------
+
+
+def test_next_scan_at_returns_today_when_before_scan_time(settings: Settings) -> None:
+    """If ``now`` is before today's scan_time, the next fire is today."""
+    from datetime import datetime as _dt
+
+    from vhsbot.handlers import _next_scan_at
+
+    now = _dt(2026, 6, 5, 7, 30, tzinfo=settings.tz)  # 07:30 local; scan_time=08:00
+    result = _next_scan_at(settings, now=now)
+
+    assert result.date() == now.date()
+    assert result.hour == 8
+    assert result.minute == 0
+
+
+def test_next_scan_at_returns_tomorrow_when_after_scan_time(settings: Settings) -> None:
+    """If today's scan_time has already passed, the next fire is tomorrow."""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    from vhsbot.handlers import _next_scan_at
+
+    now = _dt(2026, 6, 5, 9, 0, tzinfo=settings.tz)  # 09:00 local; today's 08:00 passed
+    result = _next_scan_at(settings, now=now)
+
+    assert result.date() == (now.date() + _td(days=1))
+    assert result.hour == 8
+
+
+def test_next_scan_at_equal_to_scan_time_rolls_to_tomorrow(settings: Settings) -> None:
+    """Boundary: ``now == today_candidate`` rolls forward, not stuck on today."""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    from vhsbot.handlers import _next_scan_at
+
+    now = _dt(2026, 6, 5, 8, 0, 0, tzinfo=settings.tz)  # exact match
+    result = _next_scan_at(settings, now=now)
+
+    assert result.date() == (now.date() + _td(days=1)), (
+        "now == scan_time must roll to tomorrow (today's slot has already fired)"
+    )
+
+
+def test_next_scan_at_dst_spring_forward_day(settings: Settings) -> None:
+    """Berlin spring DST (2026-03-29): 08:00 local resolves to UTC+2 (CEST)."""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    from vhsbot.handlers import _next_scan_at
+
+    # 07:30 on the spring-forward day. DST already kicked in at 02:00->03:00,
+    # so 08:00 local is CEST (UTC+2) -- not CET (UTC+1).
+    now = _dt(2026, 3, 29, 7, 30, tzinfo=settings.tz)
+    result = _next_scan_at(settings, now=now)
+
+    assert result.date() == now.date()
+    assert result.hour == 8
+    assert result.utcoffset() == _td(hours=2), (
+        "On the spring-forward day, 08:00 Berlin is CEST (UTC+2)"
+    )
+
+
+def test_next_scan_at_dst_fall_back_day(settings: Settings) -> None:
+    """Berlin fall DST (2026-10-25): 08:00 local resolves to UTC+1 (CET)."""
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+
+    from vhsbot.handlers import _next_scan_at
+
+    # 07:30 on the fall-back day. DST has just ended at 03:00->02:00, so
+    # 08:00 local is CET (UTC+1).
+    now = _dt(2026, 10, 25, 7, 30, tzinfo=settings.tz)
+    result = _next_scan_at(settings, now=now)
+
+    assert result.date() == now.date()
+    assert result.hour == 8
+    assert result.utcoffset() == _td(hours=1), "On the fall-back day, 08:00 Berlin is CET (UTC+1)"
+
+
+def test_format_status_message_empty_state_mentions_next_scan(settings: Settings) -> None:
+    """The empty-state branch (no prior scan) must surface the next scan time."""
+    from datetime import datetime as _dt
+
+    from vhsbot.handlers import format_status_message
+
+    next_at = _dt(2026, 6, 6, 8, 0, tzinfo=settings.tz)
+    text = format_status_message(None, next_at)
+
+    assert "08:00" in text
+    # Either a clear "no scans" phrase or the date — empty-state must be
+    # visibly different from a "last scan: ..." message.
+    assert "No scans" in text or "no scans" in text or "yet" in text
+
+
+def test_format_status_message_includes_counters_when_prior_scan_exists(
+    settings: Settings,
+) -> None:
+    """When a prior scan exists, the body must surface its counters."""
+    from datetime import datetime as _dt
+
+    from vhsbot.handlers import format_status_message
+
+    entry = db.ScanLogEntry(
+        id=1,
+        scan_at="2026-06-04 08:00:13",
+        districts_crawled=3,
+        courses_seen=27,
+        matches_sent=2,
+        succeeded=True,
+        error_summary=None,
+    )
+    next_at = _dt(2026, 6, 5, 8, 0, tzinfo=settings.tz)
+
+    text = format_status_message(entry, next_at)
+
+    assert "3" in text  # districts_crawled
+    assert "27" in text  # courses_seen
+    assert "2" in text  # matches_sent
+    assert "2026-06-04 08:00:13" in text  # scan_at timestamp surfaces
+
+
+def test_format_status_message_surfaces_error_summary_on_failure(settings: Settings) -> None:
+    """A failed prior scan must surface its ``error_summary`` so /status is debugging-useful."""
+    from datetime import datetime as _dt
+
+    from vhsbot.handlers import format_status_message
+
+    entry = db.ScanLogEntry(
+        id=2,
+        scan_at="2026-06-04 08:01:42",
+        districts_crawled=1,
+        courses_seen=10,
+        matches_sent=0,
+        succeeded=False,
+        error_summary="district 31: HTTPError 503",
+    )
+    next_at = _dt(2026, 6, 5, 8, 0, tzinfo=settings.tz)
+
+    text = format_status_message(entry, next_at)
+
+    assert "district 31" in text
+    assert "503" in text
+
+
+async def test_status_command_empty_state_sends_next_scan_message(
+    settings: Settings, conn: sqlite3.Connection
+) -> None:
+    """``/status`` against an empty ``scan_log`` replies with the empty-state body."""
+    ctx = _make_context(settings=settings, conn=conn)
+    update = _make_update(user_id=111)
+    update.effective_user = MagicMock()
+    update.effective_user.id = 111
+    update.message = AsyncMock()
+
+    await handlers.status(update, ctx)
+
+    update.message.reply_text.assert_awaited_once()
+    sent_text = update.message.reply_text.await_args.args[0]
+    # Empty state surfaces "no scans" prose somewhere.
+    assert "08:00" in sent_text or "next scan" in sent_text.lower()
+
+
+async def test_status_command_with_prior_scan_surfaces_counters(
+    settings: Settings, conn: sqlite3.Connection
+) -> None:
+    """``/status`` after a recorded scan replies with its counters."""
+    db.record_scan(
+        conn,
+        districts_crawled=5,
+        courses_seen=42,
+        matches_sent=7,
+        succeeded=True,
+    )
+    ctx = _make_context(settings=settings, conn=conn)
+    update = _make_update(user_id=111)
+    update.effective_user = MagicMock()
+    update.effective_user.id = 111
+    update.message = AsyncMock()
+
+    await handlers.status(update, ctx)
+
+    update.message.reply_text.assert_awaited_once()
+    sent_text = update.message.reply_text.await_args.args[0]
+    assert "5" in sent_text
+    assert "42" in sent_text
+    assert "7" in sent_text

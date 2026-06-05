@@ -134,3 +134,89 @@ def test_course_card_with_minimal_course_data() -> None:
     assert "Date: \n" not in text
     # The keyboard still resolves cleanly.
     assert markup.inline_keyboard[0][0].url == "https://example.test/x"
+
+
+# ---------------------------------------------------------------------------
+# Phase 9: format_failure_alert
+# ---------------------------------------------------------------------------
+
+
+def _settings_for_failure_alert(token: str = "123:SECRETTOKEN") -> Any:
+    """Build a minimal Settings instance for failure-alert tests."""
+    from datetime import time
+    from pathlib import Path
+    from zoneinfo import ZoneInfo
+
+    from vhsbot.config import Settings
+
+    return Settings(
+        telegram_bot_token=token,
+        allowed_user_ids=frozenset({111}),
+        scan_time=time(hour=8),
+        tz=ZoneInfo("Europe/Berlin"),
+        db_path=Path("/tmp/x.db"),
+        snapshot_dir=Path("/tmp/x-snap"),
+        log_level="INFO",
+        scrape_sleep_seconds=0.0,
+    )
+
+
+def test_format_failure_alert_includes_exception_type_and_time() -> None:
+    from datetime import datetime
+
+    from vhsbot.formatting import format_failure_alert
+
+    settings = _settings_for_failure_alert()
+    exc = RuntimeError("VHS Berlin returned 503")
+    when = datetime(2026, 6, 5, 8, 1, 42)
+
+    text = format_failure_alert(exc, settings, when)
+
+    assert "RuntimeError" in text
+    assert "503" in text
+    assert "08:01" in text
+
+
+def test_format_failure_alert_redacts_bot_token() -> None:
+    """Critical fix #3: the bot token must never appear in the alert body.
+
+    Telegram messages are cached client-side; a token in chat history is
+    effectively leaked.
+    """
+    from datetime import datetime
+
+    from vhsbot.formatting import format_failure_alert
+
+    token = "987654:VERYSECRETTOKEN"
+    settings = _settings_for_failure_alert(token=token)
+    # An exception whose str() embeds the token (e.g. httpx URL formatting).
+    exc = RuntimeError(f"Auth failed: token={token} in request")
+    when = datetime(2026, 6, 5, 8, 1, 0)
+
+    text = format_failure_alert(exc, settings, when)
+
+    assert token not in text, "format_failure_alert must redact the bot token"
+    assert "[redacted]" in text
+
+
+def test_format_failure_alert_truncates_long_exception_messages() -> None:
+    """The redacted detail is truncated to 200 chars so a giant traceback can't
+    blow up the Telegram message-size budget.
+    """
+    from datetime import datetime
+
+    from vhsbot.formatting import format_failure_alert
+
+    settings = _settings_for_failure_alert()
+    long_payload = "x" * 1000
+    exc = RuntimeError(long_payload)
+    when = datetime(2026, 6, 5, 8, 0, 0)
+
+    text = format_failure_alert(exc, settings, when)
+
+    # The total text is the prefix ("⚠️ Scan failed at HH:MM: RuntimeError: ")
+    # plus the 200-char truncated detail. Easier to assert: the resulting
+    # text is bounded well under 400 chars.
+    assert len(text) < 400, (
+        f"format_failure_alert must truncate; got {len(text)}-char body for 1000-char exc"
+    )
