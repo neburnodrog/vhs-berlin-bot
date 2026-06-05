@@ -566,9 +566,19 @@ async def scan(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.bot_data[BD_SCAN_RUNNING] = True
     try:
         await update.message.reply_text("Manual scan started.")
-        # Call through the module-level alias so tests can monkeypatch
-        # ``handlers._daily_scan`` directly.
-        await _daily_scan(context)
+        try:
+            # Call through the module-level alias so tests can monkeypatch
+            # ``handlers._daily_scan`` directly.
+            await _daily_scan(context)
+        except Exception:
+            # Phase 9 review fix: do NOT re-raise. ``daily_scan``'s except
+            # clause already fired the (informative) failure-push to every
+            # whitelisted user; re-raising would additionally trigger the
+            # global error handler and send a duplicate "Something went
+            # wrong" apology on top of it. Bug surfaced in production
+            # 2026-06-05 when the user saw both messages back-to-back.
+            logger.exception("manual /scan failed; failure-push already sent")
+            return
         await update.message.reply_text("Manual scan complete.")
     finally:
         context.bot_data[BD_SCAN_RUNNING] = False

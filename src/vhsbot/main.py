@@ -11,16 +11,25 @@ and shared with the handlers module to avoid string-literal drift.
 **On-demand backfill design choice (Phase 4):** the ``/watch`` handler
 awaits ``scraper.crawl`` synchronously and only then returns. The user
 sees a typing indicator for up to ~60s. We picked this over the
-fire-and-forget alternative because:
+fire-and-forget alternative because the blocking flow is materially
+simpler — no orphan-task lifetime management, no race against
+``shutdown``.
 
-1. The bot is single-user; nobody else is waiting for handler capacity.
-2. The blocking flow is materially simpler — no orphan-task lifetime
-   management, no race against ``shutdown``.
+**Concurrent updates (Phase 9 review fix):** PTB v22 defaults to
+``concurrent_updates=1`` — only ONE update processed at a time. That
+meant a long-running ``/scan`` (or ``/watch`` with a deep district)
+blocked every subsequent ``/status``, ``/help``, etc. for up to several
+minutes. The whole point of ``/status`` is to answer "is the bot alive?"
+*while* something else is happening, so we enable concurrent dispatch
+here. The single-user model means handler contention is rare in
+practice; the check-then-set on ``BD_SCAN_RUNNING`` in ``handlers.scan``
+remains atomic because asyncio only context-switches at ``await`` points
+and there is no ``await`` between the read and the write.
 
 The Phase 5 daily ``JobQueue.run_daily`` scan + manual ``/scan`` trigger
-share the same ``daily_scan`` callback; manual triggers use a
-``scan_running`` bot_data flag so a manual call during the scheduled
-window correctly defers.
+share the same ``daily_scan`` callback; both sides set
+``BD_SCAN_RUNNING`` on entry and reset it in their finally clauses so a
+manual call during the scheduled window correctly defers.
 
 **Rate limiting:** ``AIORateLimiter`` throttles *every* outbound request
 by default — including the 15-message backfill burst. We don't pass any
@@ -119,6 +128,12 @@ def build_application(settings: Settings) -> Application:
         Application.builder()
         .token(settings.telegram_bot_token)
         .rate_limiter(AIORateLimiter())
+        # Phase 9 review fix: PTB defaults to ``concurrent_updates=1``
+        # which serializes update dispatch and blocks /status during a
+        # long-running /scan. ``True`` coerces to the library's default
+        # max (256 in-flight updates) — well beyond what a single-user
+        # bot will ever need; effectively "unlimited concurrency".
+        .concurrent_updates(True)
         .post_init(_post_init)
         .post_shutdown(_post_shutdown)
         .build()

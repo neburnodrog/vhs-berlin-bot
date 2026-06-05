@@ -253,3 +253,80 @@ def test_parse_district_names_falls_back_to_str_district_id_when_label_missing()
     names = parser.parse_district_names(html)
     assert names[31] == "Mitte"
     assert names[39] == "39"
+
+
+# --- Phase 9 review-fix: defensive availability parsing -------------------
+
+
+def _row_html(kurs_id: int, places_inner: str) -> bytes:
+    """Synthesize a single CourseList.aspx-shaped row with a configurable
+    "Places" cell. Used to exercise the boundary between the parser and the
+    diff classifier without depending on the captured fixtures.
+    """
+    return (
+        b"<html><body><table>"
+        b'<tr class="DataGridItem">'
+        b'<td class="DataGridItemCourseTitle">'
+        b'<a href="CourseDetail.aspx?id=' + str(kurs_id).encode() + b'">Test Course</a>'
+        b"</td>"
+        b'<td class="DataGridItemCourseNumber">XYZ-001</td>'
+        b'<td class="DataGridItemDistrict">Mitte</td>'
+        b'<td class="DataGridItemCourseBegin">01.06.2026</td>'
+        b'<td class="DataGridItemPlaces">' + places_inner.encode() + b"</td>"
+        b"</tr></table></body></html>"
+    )
+
+
+def test_parse_results_drops_row_with_empty_availability() -> None:
+    """A row whose Places cell is empty must be silently dropped at the
+    parser boundary.
+
+    Phase 9 incident: a single empty-availability row triggered a
+    ValueError in ``diff.classify`` and aborted the entire scan after
+    1290 courses had already been processed. The fix is defensive
+    parsing at the boundary: rows we cannot normalize to a canonical
+    availability literal are dropped before they reach the classifier.
+    """
+    html = _row_html(kurs_id=99001, places_inner="")
+    snapshots = parser.parse_results_page(html)
+    assert snapshots == [], "an empty-availability row must be dropped at the parser boundary"
+
+
+def test_parse_results_drops_row_with_unknown_availability_literal() -> None:
+    """A row whose Places cell does not normalize to one of the four
+    canonical literals (``>2 | 2 | 1 | belegt``) must also be dropped.
+    """
+    html = _row_html(kurs_id=99002, places_inner="verfügbar")  # fictional literal
+    snapshots = parser.parse_results_page(html)
+    assert snapshots == []
+
+
+def test_parse_results_logs_warning_when_row_is_dropped(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Dropping a bad row must surface in the operator's log so upstream
+    data corruption is visible. The log must include the ``kurs_id`` so
+    investigations can pinpoint the offending course.
+    """
+    import logging as _logging
+
+    html = _row_html(kurs_id=99003, places_inner="")
+    with caplog.at_level(_logging.WARNING, logger="vhsbot.parser"):
+        parser.parse_results_page(html)
+    assert any("99003" in rec.message for rec in caplog.records), (
+        f"WARNING must mention dropped kurs_id; saw: {[r.message for r in caplog.records]!r}"
+    )
+
+
+def test_parse_results_keeps_row_with_canonical_availability() -> None:
+    """Sanity: the defensive filter must NOT drop legitimate rows. The
+    four canonical literals (and their case/whitespace variants the
+    normalizer accepts) all pass through.
+    """
+    for literal in (">2", "2", "1", "belegt", "BELEGT", " > 2 "):
+        html = _row_html(kurs_id=99100, places_inner=literal)
+        snapshots = parser.parse_results_page(html)
+        assert len(snapshots) == 1, (
+            f"canonical input {literal!r} should NOT be dropped by defensive parsing"
+        )
+        assert snapshots[0].availability in AVAILABILITY_LITERALS

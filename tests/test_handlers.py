@@ -811,10 +811,55 @@ class TestScanCommand:
             f"reject message must say a scan is already running; got: {text!r}"
         )
 
-    async def test_scan_command_clears_flag_on_exception(
+    async def test_scan_command_handles_daily_scan_failure_cleanly(
         self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """If daily_scan raises, the scan_running flag MUST be cleared (try/finally)."""
+        """Phase 9 review fix: if daily_scan raises, the /scan handler MUST:
+
+        1. Clear the ``scan_running`` flag (try/finally — unchanged from
+           the original behavior).
+        2. NOT re-raise the exception. The Phase 9 failure-push (fired
+           inside ``daily_scan``'s except clause) already informs the user;
+           re-raising would trigger PTB's global error handler on top, so
+           the user would receive a duplicate "Something went wrong"
+           apology after the (informative) failure-push.
+
+        Bug surfaced in production 2026-06-05 when the user saw three
+        consecutive messages on a single failed /scan:
+        the failure-push, the generic apology, and the queued /status reply.
+        """
+        from vhsbot import jobs
+        from vhsbot._app_state import BD_SCAN_RUNNING
+
+        async def boom_daily_scan(context: object) -> None:
+            raise RuntimeError("simulated crash")
+
+        monkeypatch.setattr(jobs, "daily_scan", boom_daily_scan)
+        monkeypatch.setattr(handlers, "_daily_scan", boom_daily_scan, raising=False)
+
+        update = _make_update(user_id=111)
+        ctx = _make_context(settings=settings, conn=conn, client=object())
+
+        # Must NOT raise. The handler catches daily_scan's exception so
+        # the global error handler does not fire on top of the Phase 9
+        # failure-push.
+        await handlers.scan(update, ctx)
+
+        assert ctx.bot_data.get(BD_SCAN_RUNNING) is False, (
+            "scan_running flag must be cleared by try/finally even on exception"
+        )
+
+    async def test_scan_command_does_not_send_apology_on_daily_scan_failure(
+        self, settings: Settings, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The /scan handler must not echo a second "something went wrong"
+        message on top of the Phase 9 failure-push.
+
+        Concretely: when daily_scan raises, the handler should reply with
+        "Manual scan started." (already done) and then SILENTLY return.
+        No "Manual scan complete." (that would be a lie). No "Something
+        went wrong." (that would duplicate the failure-push).
+        """
         from vhsbot import jobs
 
         async def boom_daily_scan(context: object) -> None:
@@ -826,11 +871,19 @@ class TestScanCommand:
         update = _make_update(user_id=111)
         ctx = _make_context(settings=settings, conn=conn, client=object())
 
-        with pytest.raises(RuntimeError, match="simulated crash"):
-            await handlers.scan(update, ctx)
+        await handlers.scan(update, ctx)
 
-        assert ctx.bot_data.get("scan_running") is False, (
-            "scan_running flag must be cleared by try/finally even on exception"
+        # Inspect every reply the handler sent.
+        all_reply_texts = [call.args[0] for call in update.message.reply_text.await_args_list]
+        # The "started" ack IS allowed.
+        assert any("started" in t.lower() for t in all_reply_texts)
+        # The "complete" success ack must NOT be sent on failure.
+        assert not any("complete" in t.lower() for t in all_reply_texts), (
+            f"handler claimed success on failure path; replies were {all_reply_texts!r}"
+        )
+        # No generic apology — failure-push covers it.
+        assert not any("wrong" in t.lower() or "try again" in t.lower() for t in all_reply_texts), (
+            f"handler sent duplicate apology; replies were {all_reply_texts!r}"
         )
 
 

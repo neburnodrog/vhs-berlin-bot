@@ -1,11 +1,23 @@
 """HTML parsing for vhsit.berlin.de.
 
-Pure functions over raw response bytes. No I/O, no httpx, no logging —
-everything in here is fixture-testable.
+Pure functions over raw response bytes. No I/O, no httpx — everything in
+here is fixture-testable.
+
+A single concession to logging exists in :func:`_parse_row`: when a row's
+"Places" cell cannot be normalized to one of the four canonical
+:data:`AVAILABILITY_LITERALS`, the row is dropped silently from the
+parser's output and a WARNING is logged with the offending ``kurs_id``.
+This is the Phase 9 fix for a production incident where a single empty
+``DataGridItemPlaces`` cell caused ``diff.classify`` to raise mid-scan
+and abort the entire crawl after 1290 courses had already been processed.
+Defensive parsing at the boundary is the right pattern — the classifier's
+``AVAILABILITY_LITERALS`` invariant stays intact; bad rows just never
+reach it.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
@@ -13,6 +25,8 @@ from bs4 import BeautifulSoup
 from bs4.element import Tag
 
 from vhsbot.db import AVAILABILITY_LITERALS, CourseSnapshot
+
+logger = logging.getLogger(__name__)
 
 _ENCODING = "windows-1252"
 _KURS_ID_RE = re.compile(r"CourseDetail\.aspx\?id=(\d+)", re.IGNORECASE)
@@ -84,6 +98,24 @@ def _parse_row(tr: Tag) -> CourseSnapshot | None:
         return None
     kurs_id = int(m.group(1))
 
+    raw_places = _text(tr.select_one("td.DataGridItemPlaces"))
+    availability = _availability(raw_places)
+    if availability not in AVAILABILITY_LITERALS:
+        # Defensive parsing (Phase 9 review fix): a row whose Places cell
+        # cannot be normalized to a canonical literal must NOT propagate to
+        # the diff classifier — its ValueError would abort the entire scan
+        # for one bad row. Drop it here, surface the raw value at WARNING
+        # so the operator can spot upstream data drift (or a parser
+        # extraction bug) in Coolify logs.
+        logger.warning(
+            "dropping course row with unrecognized availability literal "
+            "%r (kurs_id=%s); raw cell text was %r",
+            availability,
+            kurs_id,
+            raw_places,
+        )
+        return None
+
     return CourseSnapshot(
         kurs_id=kurs_id,
         title=_text(title_cell),
@@ -91,7 +123,7 @@ def _parse_row(tr: Tag) -> CourseSnapshot | None:
         district=_text(tr.select_one("td.DataGridItemDistrict")) or None,
         venue=None,  # not in CourseList.aspx rows; detail-page parsing is out of scope for v1
         date_range=_text(tr.select_one("td.DataGridItemCourseBegin")) or None,
-        availability=_availability(_text(tr.select_one("td.DataGridItemPlaces"))),
+        availability=availability,
     )
 
 

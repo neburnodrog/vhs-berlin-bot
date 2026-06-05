@@ -212,3 +212,30 @@ def test_build_application_uses_aiorate_limiter(settings: Settings) -> None:
     assert isinstance(rate_limiter, AIORateLimiter), (
         f"expected AIORateLimiter, got {type(rate_limiter).__name__}: {rate_limiter!r}"
     )
+
+
+def test_build_application_enables_concurrent_updates(settings: Settings) -> None:
+    """Phase 9 review fix: ``concurrent_updates`` must be enabled.
+
+    Without it, PTB processes every update sequentially -- a long-running
+    handler (e.g. the /scan synchronous backfill, which can run several
+    minutes) blocks every subsequent update, including /status. The whole
+    point of /status is to answer "is the bot alive?" *while* something
+    else is happening.
+
+    Pinning the flag here ensures a future "let's simplify the builder"
+    refactor that drops the call surfaces in tests, not on a frustrated
+    user who watches /status hang for five minutes.
+    """
+    app = main.build_application(settings)
+    # PTB v22's ``Application.concurrent_updates`` returns the
+    # SimpleUpdateProcessor semaphore's max value. The library's DEFAULT
+    # is 1 (one update processed at a time -- effectively sequential).
+    # Truthiness is therefore not enough: ``True > 1`` is what indicates
+    # real concurrent dispatch (``.concurrent_updates(True)`` in the
+    # builder coerces to 256).
+    assert app.concurrent_updates > 1, (
+        f"concurrent_updates must be > 1 for concurrent dispatch; got "
+        f"{app.concurrent_updates!r} (PTB v22 default is 1, which is "
+        f"effectively sequential and blocks /status during a long /scan)"
+    )
