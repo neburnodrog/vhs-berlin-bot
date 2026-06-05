@@ -49,6 +49,16 @@ CREATE TABLE IF NOT EXISTS notification_log (
     reason   TEXT NOT NULL,
     PRIMARY KEY (user_id, kurs_id, reason)
 );
+
+CREATE TABLE IF NOT EXISTS scan_log (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    scan_at           TEXT    NOT NULL DEFAULT (datetime('now')),
+    districts_crawled INTEGER NOT NULL,
+    courses_seen      INTEGER NOT NULL,
+    matches_sent      INTEGER NOT NULL,
+    succeeded         INTEGER NOT NULL,
+    error_summary     TEXT
+);
 """
 
 
@@ -379,3 +389,67 @@ def count_notifications_since(conn: sqlite3.Connection, *, user_id: int, since: 
         (user_id, since),
     ).fetchone()
     return row[0]
+
+
+# --- scan_log (Phase 9) ----------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ScanLogEntry:
+    id: int
+    scan_at: str
+    districts_crawled: int
+    courses_seen: int
+    matches_sent: int
+    succeeded: bool
+    error_summary: str | None
+
+
+def record_scan(
+    conn: sqlite3.Connection,
+    *,
+    districts_crawled: int,
+    courses_seen: int,
+    matches_sent: int,
+    succeeded: bool,
+    error_summary: str | None = None,
+) -> None:
+    """Append one row to ``scan_log``.
+
+    Append-only (not single-row UPSERT) so that the ``scan_running`` reset
+    in ``daily_scan``'s finally clause never races a partial update —
+    each scan writes its own immutable row.
+    """
+    with conn:
+        conn.execute(
+            """
+            INSERT INTO scan_log (
+                districts_crawled, courses_seen, matches_sent, succeeded, error_summary
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                districts_crawled,
+                courses_seen,
+                matches_sent,
+                1 if succeeded else 0,
+                error_summary,
+            ),
+        )
+
+
+def latest_scan(conn: sqlite3.Connection) -> ScanLogEntry | None:
+    row = conn.execute(
+        "SELECT id, scan_at, districts_crawled, courses_seen, matches_sent, "
+        "succeeded, error_summary FROM scan_log ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    return ScanLogEntry(
+        id=row["id"],
+        scan_at=row["scan_at"],
+        districts_crawled=row["districts_crawled"],
+        courses_seen=row["courses_seen"],
+        matches_sent=row["matches_sent"],
+        succeeded=bool(row["succeeded"]),
+        error_summary=row["error_summary"],
+    )

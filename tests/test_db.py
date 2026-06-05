@@ -17,12 +17,18 @@ def conn() -> sqlite3.Connection:
     return c
 
 
-def test_init_schema_creates_all_four_tables(conn: sqlite3.Connection) -> None:
+def test_init_schema_creates_all_tables(conn: sqlite3.Connection) -> None:
     tables = {
         row[0]
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
     }
-    assert {"subscriptions", "user_settings", "seen_courses", "notification_log"} <= tables
+    assert {
+        "subscriptions",
+        "user_settings",
+        "seen_courses",
+        "notification_log",
+        "scan_log",
+    } <= tables
 
 
 def test_init_schema_is_idempotent(conn: sqlite3.Connection) -> None:
@@ -334,6 +340,78 @@ def test_count_notifications_since_excludes_rows_outside_window(
         f"count_notifications_since must include the in-window row and exclude "
         f"the just-out-of-window row; got {count}"
     )
+
+
+# --- scan_log (Phase 9) ----------------------------------------------------
+
+
+def test_latest_scan_returns_none_when_empty(conn: sqlite3.Connection) -> None:
+    assert db.latest_scan(conn) is None
+
+
+def test_record_scan_inserts_row_with_default_scan_at(conn: sqlite3.Connection) -> None:
+    db.record_scan(
+        conn,
+        districts_crawled=3,
+        courses_seen=27,
+        matches_sent=4,
+        succeeded=True,
+    )
+
+    entry = db.latest_scan(conn)
+    assert entry is not None
+    assert entry.districts_crawled == 3
+    assert entry.courses_seen == 27
+    assert entry.matches_sent == 4
+    assert entry.succeeded is True
+    assert entry.error_summary is None
+    # scan_at auto-set by sqlite default.
+    assert entry.scan_at  # non-empty string
+
+
+def test_record_scan_failure_carries_error_summary(conn: sqlite3.Connection) -> None:
+    db.record_scan(
+        conn,
+        districts_crawled=2,
+        courses_seen=10,
+        matches_sent=0,
+        succeeded=False,
+        error_summary="district 31: HTTPError 503",
+    )
+
+    entry = db.latest_scan(conn)
+    assert entry is not None
+    assert entry.succeeded is False
+    assert entry.error_summary == "district 31: HTTPError 503"
+
+
+def test_record_scan_is_append_only_not_upsert(conn: sqlite3.Connection) -> None:
+    """Two successive records must produce two rows, not overwrite one another."""
+    db.record_scan(conn, districts_crawled=1, courses_seen=5, matches_sent=0, succeeded=True)
+    db.record_scan(conn, districts_crawled=2, courses_seen=10, matches_sent=1, succeeded=True)
+
+    row_count = conn.execute("SELECT COUNT(*) FROM scan_log").fetchone()[0]
+    assert row_count == 2
+
+
+def test_latest_scan_returns_most_recent_row(conn: sqlite3.Connection) -> None:
+    """When multiple rows exist, ``latest_scan`` returns the one with the highest id."""
+    db.record_scan(conn, districts_crawled=1, courses_seen=5, matches_sent=0, succeeded=True)
+    db.record_scan(conn, districts_crawled=2, courses_seen=10, matches_sent=1, succeeded=True)
+    db.record_scan(
+        conn,
+        districts_crawled=3,
+        courses_seen=15,
+        matches_sent=2,
+        succeeded=False,
+        error_summary="boom",
+    )
+
+    entry = db.latest_scan(conn)
+    assert entry is not None
+    assert entry.districts_crawled == 3
+    assert entry.succeeded is False
+    assert entry.error_summary == "boom"
 
 
 def test_set_last_availability_overwrites_only_that_column(conn: sqlite3.Connection) -> None:

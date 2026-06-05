@@ -33,6 +33,20 @@ class Settings:
         "https://www.vhsit.berlin.de/VHSKURSE/BusinessPages/CourseDetail.aspx?id={kurs_id}"
     )
 
+    def redact(self, text: str) -> str:
+        """Strip known secrets from ``text``.
+
+        Used at the Telegram-boundary (failure-push body) so an exception
+        whose message happens to embed the bot token never ships to the
+        chat client. Extend the ``secrets`` tuple when a new secret-bearing
+        field lands on ``Settings`` — ``redact()`` itself stays unchanged.
+        """
+        secrets = (self.telegram_bot_token,)
+        for secret in secrets:
+            if secret:
+                text = text.replace(secret, "[redacted]")
+        return text
+
 
 def _require(name: str) -> str:
     value = os.environ.get(name, "").strip()
